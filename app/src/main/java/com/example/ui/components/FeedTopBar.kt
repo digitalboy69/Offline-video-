@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
@@ -87,6 +88,7 @@ fun FeedTopBar(
     onToggleSearch: () -> Unit,
     onRefresh: () -> Unit,
     onOpenPopup: () -> Unit = {},
+    onOpenAllFeatures: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isFilterMenuExpanded by remember { mutableStateOf(false) }
@@ -234,95 +236,16 @@ fun FeedTopBar(
                     }
                 }
 
-                // Right Action Icons Row
+                // Right Action Icons Row (Organized: Search, Grid Switcher, and 3-Dots Master Hub)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Random / Shuffle Toggle Button
-                    IconButton(
-                        onClick = onToggleShuffle,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .shadow(4.dp, CircleShape)
-                            .background(
-                                if (isShuffleMode) Color(0xCC7C3AED) else GlassBackground,
-                                CircleShape
-                            )
-                            .border(
-                                1.dp,
-                                if (isShuffleMode) Color(0xFFC4B5FD) else GlassBorder,
-                                CircleShape
-                            )
-                            .testTag("feed_shuffle_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Shuffle,
-                            contentDescription = "Shuffle / Random Mode",
-                            tint = if (isShuffleMode) Color(0xFFEDE9FE) else Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Sort Menu Button
-                    Box {
-                        IconButton(
-                            onClick = { isSortMenuExpanded = true },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .shadow(4.dp, CircleShape)
-                                .background(GlassBackground, CircleShape)
-                                .border(1.dp, GlassBorder, CircleShape)
-                                .testTag("feed_sort_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Sort,
-                                contentDescription = "Sort videos",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Sort Dropdown Menu
-                        DropdownMenu(
-                            expanded = isSortMenuExpanded,
-                            onDismissRequest = { isSortMenuExpanded = false },
-                            modifier = Modifier
-                                .background(Color(0xF00F172A))
-                                .border(1.dp, GlassBorder, RoundedCornerShape(16.dp))
-                                .testTag("sort_dropdown_menu")
-                        ) {
-                            Text(
-                                text = "SORT BY",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                            )
-                            SortOption.values().forEach { sortOption ->
-                                val isSelected = selectedSort == sortOption && !isShuffleMode
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            sortOption.displayName,
-                                            color = if (isSelected) Color(0xFFA78BFA) else Color.White,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    },
-                                    onClick = {
-                                        onSelectSort(sortOption)
-                                        isSortMenuExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // Search Button
+                    // 1. Search Button
                     IconButton(
                         onClick = onToggleSearch,
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .shadow(4.dp, CircleShape)
                             .background(
                                 if (isSearchOpen) Color(0xCC7C3AED) else GlassBackground,
@@ -339,11 +262,11 @@ fun FeedTopBar(
                         )
                     }
 
-                    // Grid View / Reels View Switcher
+                    // 2. Grid View / Reels Feed Switcher
                     IconButton(
                         onClick = onToggleGridView,
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .shadow(4.dp, CircleShape)
                             .background(
                                 if (isGridView) Color(0xCC38BDF8) else GlassBackground,
@@ -360,39 +283,21 @@ fun FeedTopBar(
                         )
                     }
 
-                    // Pop-up Player Button
+                    // 3. 3-Dots Master Features Hub (Holds all features & controls in one place)
                     IconButton(
-                        onClick = onOpenPopup,
+                        onClick = onOpenAllFeatures,
                         modifier = Modifier
-                            .size(36.dp)
-                            .shadow(4.dp, CircleShape)
-                            .background(GlassBackground, CircleShape)
-                            .border(1.dp, GlassBorder, CircleShape)
-                            .testTag("feed_popup_button")
+                            .size(38.dp)
+                            .shadow(6.dp, CircleShape)
+                            .background(Color(0xE61E1B4B), CircleShape)
+                            .border(1.dp, Color(0x66A78BFA), CircleShape)
+                            .testTag("feed_more_features_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.PictureInPictureAlt,
-                            contentDescription = "Pop-up Player",
-                            tint = Color(0xFFA78BFA),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Refresh Button
-                    IconButton(
-                        onClick = onRefresh,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .shadow(4.dp, CircleShape)
-                            .background(GlassBackground, CircleShape)
-                            .border(1.dp, GlassBorder, CircleShape)
-                            .testTag("feed_refresh_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh videos",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "All Features & Controls",
+                            tint = Color(0xFFE0E7FF),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -461,63 +366,59 @@ fun FeedTopBar(
                 }
             }
 
-            // Sub-bar: Offline Status Pill & Storage Summary & Counter
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Offline status pill
+            // Sub-bar: Compact, sleek status capsule
+            if (totalVideosCount > 0) {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .background(Color(0x3310B981), CircleShape)
-                        .border(1.dp, Color(0x3334D399), CircleShape)
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.WifiOff,
-                        contentDescription = null,
-                        tint = Color(0xFF34D399),
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "100% Offline",
-                        color = Color(0xFF6EE7B7),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                // Storage summary & counter
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (totalVideosCount > 0) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(Color(0x2210B981), CircleShape)
+                            .border(1.dp, Color(0x3334D399), CircleShape)
+                            .padding(horizontal = 9.dp, vertical = 3.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(Color(0xFF34D399), CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = "$totalVideosCount videos • $totalStorageFormatted",
+                            text = "Offline Vault",
+                            color = Color(0xFF6EE7B7),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "$totalVideosCount reels • $totalStorageFormatted",
                             color = Color(0xFF94A3B8),
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier
                                 .background(GlassBackground, CircleShape)
                                 .border(1.dp, GlassBorderSubtle, CircleShape)
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .padding(horizontal = 9.dp, vertical = 3.dp)
                         )
 
                         if (!isGridView) {
-                            val positionText = "${(currentIndex + 1).coerceAtMost(totalVideosCount)} / $totalVideosCount"
                             Text(
-                                text = positionText,
-                                color = Color(0xFFCBD5E1),
-                                fontSize = 10.sp,
+                                text = "${(currentIndex + 1).coerceAtMost(totalVideosCount)} / $totalVideosCount",
+                                color = Color(0xFFE2E8F0),
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier
-                                    .background(GlassBackground, CircleShape)
-                                    .border(1.dp, GlassBorderSubtle, CircleShape)
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    .background(Color(0x337C3AED), CircleShape)
+                                    .border(1.dp, Color(0x44C4B5FD), CircleShape)
+                                    .padding(horizontal = 9.dp, vertical = 3.dp)
                             )
                         }
                     }

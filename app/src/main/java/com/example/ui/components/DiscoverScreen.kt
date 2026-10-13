@@ -38,6 +38,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -54,6 +55,21 @@ import com.example.ui.theme.GlassBackground
 import com.example.ui.theme.GlassBorder
 import com.example.ui.viewmodel.VideoFeedUiState
 import com.example.ui.viewmodel.VideoFeedViewModel
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.data.model.LocalVideo
+import com.example.ui.theme.AuroraRose
+import com.example.ui.theme.AuroraViolet
+import com.example.ui.theme.GlassStrokeTop
+import com.example.ui.theme.TextMuted
 
 @Composable
 fun DiscoverScreen(
@@ -68,32 +84,42 @@ fun DiscoverScreen(
     val focusCount = uiState.allVideos.count { it.durationMs in 10_000L..180_000L }
     val calmCount = uiState.allVideos.count { it.durationMs in 180_000L..600_000L }
     val lowEnergyCount = uiState.allVideos.count { it.durationMs >= 600_000L }
+    val continueWatching = remember(uiState.allVideos, uiState.watchHistoryMap) {
+        uiState.allVideos
+            .filter { uiState.watchHistoryMap.containsKey(it.uri.toString()) }
+            .sortedByDescending { uiState.watchHistoryMap[it.uri.toString()]?.lastPlayedAt ?: 0L }
+            .take(10)
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF090A10))
+            .appBackdrop()
             .padding(top = statusBarPadding)
             .testTag("discover_screen")
     ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 80.dp),
+            modifier = Modifier.widthIn(max = 680.dp).fillMaxSize().align(Alignment.TopCenter),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 128.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
             item {
-                Column {
-                    Text(
-                        text = "Discover",
-                        color = Color.White,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Mood-based curations & instant random picks",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 14.sp
+                ScreenHeader(
+                    title = "Discover",
+                    subtitle = "${greetingForNow()} • $totalVideos clips ready"
+                )
+            }
+
+            // Continue watching: recently played, one tap to resume
+            if (continueWatching.isNotEmpty()) {
+                item {
+                    ContinueWatchingRow(
+                        videos = continueWatching,
+                        progressOf = { video -> historyProgress(uiState, video) },
+                        onPlay = { video ->
+                            viewModel.playVideo(video)
+                            onNavigateToFeed()
+                        }
                     )
                 }
             }
@@ -117,8 +143,7 @@ fun DiscoverScreen(
                     Text(
                         text = "Brain Modes",
                         color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.titleLarge
                     )
                     BrainModesGrid(
                         focusCount = focusCount,
@@ -146,8 +171,7 @@ fun DiscoverScreen(
                     Text(
                         text = "Time Available",
                         color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.titleLarge
                     )
                     TimeAvailableFilters(
                         uiState = uiState,
@@ -166,8 +190,7 @@ fun DiscoverScreen(
                         Text(
                             text = "Browse Folders",
                             color = Color.White,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.titleLarge
                         )
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -198,9 +221,10 @@ fun DecideForMeCard(
     onClick: () -> Unit
 ) {
     Card(
-        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
+            .staggeredEntrance(1)
+            .bounceClick(pressedScale = 0.97f, onClick = onClick)
             .testTag("decide_for_me_button"),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
@@ -210,7 +234,7 @@ fun DecideForMeCard(
                 .fillMaxWidth()
                 .background(
                     brush = Brush.linearGradient(
-                        listOf(Color(0xFF7C3AED), Color(0xFFC026D3), Color(0xFFEC4899))
+                        listOf(Color(0xFF6D28D9), Color(0xFFC026D3), Color(0xFFF43F5E))
                     ),
                     shape = RoundedCornerShape(22.dp)
                 )
@@ -333,8 +357,10 @@ fun BrainModeCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        onClick = onClick,
-        modifier = modifier.testTag("brain_mode_${title.lowercase()}"),
+        modifier = modifier
+            .staggeredEntrance(2)
+            .bounceClick(onClick = onClick)
+            .testTag("brain_mode_${title.lowercase()}"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = GlassBackground)
     ) {
@@ -430,7 +456,7 @@ fun FolderChip(
         modifier = Modifier
             .background(GlassBackground, RoundedCornerShape(14.dp))
             .border(1.dp, GlassBorder, RoundedCornerShape(14.dp))
-            .clickable { onClick() }
+            .bounceClick(pressedScale = 0.95f, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -448,5 +474,156 @@ fun FolderChip(
                 fontWeight = FontWeight.Medium
             )
         }
+    }
+}
+
+// ─────────────────────────── Continue watching ───────────────────────────
+
+private fun greetingForNow(): String {
+    return when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
+        in 5..11 -> "Good morning"
+        in 12..16 -> "Good afternoon"
+        in 17..21 -> "Good evening"
+        else -> "Up late?"
+    }
+}
+
+private fun historyProgress(uiState: VideoFeedUiState, video: LocalVideo): Float {
+    if (video.durationMs <= 0L) return 0f
+    val position = uiState.watchHistoryMap[video.uri.toString()]?.lastPositionMs ?: 0L
+    return (position.toFloat() / video.durationMs.toFloat()).coerceIn(0f, 1f)
+}
+
+@Composable
+private fun ContinueWatchingRow(
+    videos: List<LocalVideo>,
+    progressOf: (LocalVideo) -> Float,
+    onPlay: (LocalVideo) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().staggeredEntrance(2)) {
+        Text(
+            text = "Continue watching",
+            style = MaterialTheme.typography.titleLarge,
+            color = Color.White
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(videos, key = { it.id }) { video ->
+                ContinueCard(
+                    video = video,
+                    progress = progressOf(video),
+                    onClick = { onPlay(video) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContinueCard(
+    video: LocalVideo,
+    progress: Float,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val shape = RoundedCornerShape(18.dp)
+
+    Column(
+        modifier = Modifier
+            .width(138.dp)
+            .bounceClick(pressedScale = 0.95f, onClick = onClick)
+            .testTag("continue_card_${video.id}")
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(9f / 16f)
+                .clip(shape)
+                .background(Color(0xFF1E293B))
+                .border(1.dp, GlassStrokeTop, shape)
+        ) {
+            if (!video.isSample) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(video.uri)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = video.displayName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF312E81), Color(0xFF4C1D95), Color(0xFF0F172A))
+                            )
+                        )
+                )
+            }
+
+            // Soft scrim keeps the play badge readable on bright frames
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color(0x33000000), Color(0xB3020617))
+                        )
+                    )
+            )
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(38.dp)
+                    .background(Color(0x66000000), CircleShape)
+                    .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Resume",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            // Progress track along the bottom edge
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(Color(0x33FFFFFF))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress)
+                        .fillMaxHeight()
+                        .background(Brush.horizontalGradient(listOf(AuroraViolet, AuroraRose)))
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = video.displayName,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = "${(progress * 100).toInt()}% watched",
+            color = TextMuted,
+            fontSize = 11.sp
+        )
     }
 }

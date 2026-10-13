@@ -1,6 +1,11 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,31 +17,31 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.WifiOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -45,13 +50,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
-import com.example.ui.theme.AmbientIndigo
-import com.example.ui.theme.AmbientPurple
-import com.example.ui.theme.FrostedViolet
-import com.example.ui.theme.GlassBackground
-import com.example.ui.theme.GlassBorder
-import com.example.ui.theme.GlassBorderSubtle
-import com.example.ui.theme.Slate950
+import com.example.ui.theme.AuroraCyan
+import com.example.ui.theme.AuroraFuchsia
+import com.example.ui.theme.AuroraViolet
+import com.example.ui.theme.GlassStrokeTop
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.TextSecondary
 
 @Composable
 fun PermissionRequestScreen(
@@ -59,162 +63,162 @@ fun PermissionRequestScreen(
     onLoadDemoClips: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Slate950, AmbientIndigo.copy(alpha = 0.5f), Slate950)
-                )
-            )
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    val transition = rememberInfiniteTransition(label = "hero")
+    val bob = transition.animateFloat(
+        initialValue = -6f,
+        targetValue = 6f,
+        animationSpec = infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "hero_bob"
+    )
+    val halo = transition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "hero_halo"
+    )
+
+    AuroraBackground(modifier = modifier) {
         Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth()
+            verticalArrangement = Arrangement.Center
         ) {
-            // App Hero Art with Frosted border
+            // Floating hero logo with breathing halo
             Box(
-                modifier = Modifier
-                    .size(130.dp)
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(Color(0x338B5CF6))
-                    .border(1.dp, GlassBorder, RoundedCornerShape(32.dp)),
+                modifier = Modifier.staggeredEntrance(0),
                 contentAlignment = Alignment.Center
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(190.dp)
+                        .graphicsLayer {
+                            scaleX = halo.value
+                            scaleY = halo.value
+                        }
+                        .background(
+                            Brush.radialGradient(
+                                listOf(AuroraViolet.copy(alpha = 0.55f), Color.Transparent)
+                            ),
+                            CircleShape
+                        )
+                )
                 Image(
                     painter = painterResource(id = R.drawable.ic_offscroll_logo),
                     contentDescription = "OffScroll Logo",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(118.dp)
-                        .clip(RoundedCornerShape(26.dp))
+                        .size(116.dp)
+                        .graphicsLayer { translationY = bob.value }
+                        .clip(RoundedCornerShape(32.dp))
+                        .border(1.dp, GlassStrokeTop, RoundedCornerShape(32.dp))
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Text(
                 text = "OffScroll",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp,
-                    letterSpacing = (-0.5).sp
-                ),
+                style = MaterialTheme.typography.displayLarge.copy(fontSize = 40.sp),
                 color = Color.White,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.staggeredEntrance(1)
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Turn your device's offline videos and saved clips into a vertical, swipeable feed.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xCCFFFFFF),
+                text = "Turn your saved videos into a smooth, swipeable vertical feed. No internet. No accounts. Just yours.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = TextSecondary,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier
+                    .padding(horizontal = 8.dp)
+                    .staggeredEntrance(2)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-            // Frosted Glass Privacy & Features card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0x660F172A)),
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, GlassBorder),
-                modifier = Modifier.fillMaxWidth()
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .staggeredEntrance(3)
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    PrivacyItem(
-                        icon = Icons.Default.WifiOff,
-                        title = "100% Offline & Private",
-                        description = "No internet needed. Your videos remain strictly on device."
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    PrivacyItem(
-                        icon = Icons.Default.VideoLibrary,
-                        title = "Auto-Scans Gallery Folders",
-                        description = "Camera, WhatsApp, Downloads, Telegram, Screen records."
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    PrivacyItem(
-                        icon = Icons.Default.Lock,
-                        title = "Scoped Storage Compliant",
-                        description = "Safe file reading with standard Android permissions."
-                    )
-                }
+                PrivacyItem(
+                    icon = Icons.Default.WifiOff,
+                    tint = AuroraCyan,
+                    title = "100% offline & private",
+                    description = "Your videos never leave this device."
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                PrivacyItem(
+                    icon = Icons.Default.VideoLibrary,
+                    tint = AuroraFuchsia,
+                    title = "Finds everything automatically",
+                    description = "Camera, WhatsApp, Downloads, Telegram, screen recordings."
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                PrivacyItem(
+                    icon = Icons.Default.Lock,
+                    tint = AuroraViolet,
+                    title = "Read-only by default",
+                    description = "Standard Android permission. Nothing changes unless you delete."
+                )
             }
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Grant Permission Button
-            Button(
+            GradientButton(
+                text = "Grant Video Access",
+                icon = Icons.Default.PlayArrow,
                 onClick = onRequestPermission,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = FrostedViolet
-                ),
-                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
-                    .shadow(8.dp, RoundedCornerShape(16.dp))
+                    .staggeredEntrance(4)
                     .testTag("grant_permission_button")
-            ) {
-                Text(
-                    text = "Grant Video Access",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Demo Mode fallback for browser emulator preview
-            OutlinedButton(
+            GlassButton(
+                text = "Preview with Demo Reels",
                 onClick = onLoadDemoClips,
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, GlassBorder),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .staggeredEntrance(5)
                     .testTag("demo_preview_button")
-            ) {
-                Text(
-                    text = "Preview with Demo Reels",
-                    color = Color(0xEEFFFFFF),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            )
         }
     }
 }
 
 @Composable
 private fun PrivacyItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
+    tint: Color,
     title: String,
     description: String
 ) {
     Row(verticalAlignment = Alignment.Top) {
         Box(
             modifier = Modifier
-                .size(34.dp)
-                .background(Color(0x338B5CF6), CircleShape)
-                .border(1.dp, Color(0x44C4B5FD), CircleShape),
+                .size(38.dp)
+                .background(tint.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+                .border(1.dp, tint.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color(0xFFC4B5FD),
-                modifier = Modifier.size(18.dp)
+                tint = tint,
+                modifier = Modifier.size(20.dp)
             )
         }
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Column {
             Text(
                 text = title,
@@ -225,10 +229,10 @@ private fun PrivacyItem(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = description,
-                color = Color(0xFF94A3B8),
-                fontSize = 12.sp
+                color = TextMuted,
+                fontSize = 12.sp,
+                lineHeight = 16.sp
             )
         }
     }
 }
-

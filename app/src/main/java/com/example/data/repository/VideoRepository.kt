@@ -270,7 +270,23 @@ class VideoRepository(
         true
     }
 
-    suspend fun toggleFavorite(video: LocalVideo): Boolean = likeVideo(video)
+    suspend fun toggleFavorite(video: LocalVideo): Boolean = withContext(Dispatchers.IO) {
+        val uriString = video.uri.toString()
+        val allUris = favoriteDao.getAllFavoriteUris()
+        if (allUris.contains(uriString)) {
+            favoriteDao.removeFavorite(uriString)
+            false
+        } else {
+            favoriteDao.addFavorite(
+                FavoriteVideo(
+                    videoUri = uriString,
+                    displayName = video.displayName,
+                    dateFavorited = System.currentTimeMillis()
+                )
+            )
+            true
+        }
+    }
 
     suspend fun recordWatchProgress(video: LocalVideo, positionMs: Long) = withContext(Dispatchers.IO) {
         val uriStr = video.uri.toString()

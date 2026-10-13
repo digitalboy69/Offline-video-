@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.pager.VerticalPager
@@ -65,22 +66,20 @@ fun VideoFeedScreen(
     var currentProgressMs by remember { mutableLongStateOf(0L) }
     var currentTotalMs by remember { mutableLongStateOf(0L) }
     var seekRatio by remember { mutableStateOf<Float?>(null) }
-    
-    // Auto-hide controls & Zen Mode
-    var areControlsVisible by remember { mutableStateOf(true) }
+    var isAllFeaturesOpen by remember { mutableStateOf(false) }
     
     // Always keep controls visible when searching or when search query is active
     LaunchedEffect(uiState.isSearchOpen, uiState.searchQuery) {
         if (uiState.isSearchOpen || uiState.searchQuery.isNotEmpty()) {
-            areControlsVisible = true
+            viewModel.setControlsVisible(true)
         }
     }
 
-    LaunchedEffect(uiState.isPlaying, areControlsVisible, pagerState.currentPage, uiState.isSearchOpen, uiState.searchQuery) {
-        // Never auto-hide when search is open or actively queried
-        if (uiState.isPlaying && areControlsVisible && !uiState.isSearchOpen && uiState.searchQuery.isEmpty()) {
-            delay(3500L) // Peaceful auto-hide only during normal uninterrupted playback
-            areControlsVisible = false
+    LaunchedEffect(uiState.isPlaying, uiState.areControlsVisible, pagerState.currentPage, uiState.isSearchOpen, uiState.searchQuery) {
+        // Peaceful auto-hide only during normal uninterrupted playback
+        if (uiState.isPlaying && uiState.areControlsVisible && !uiState.isSearchOpen && uiState.searchQuery.isEmpty()) {
+            delay(3500L)
+            viewModel.setControlsVisible(false)
         }
     }
 
@@ -129,12 +128,7 @@ fun VideoFeedScreen(
             .testTag("video_feed_screen")
     ) {
         if (uiState.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = Color(0xFF8B5CF6))
-            }
+            FeedLoadingView(modifier = Modifier.fillMaxSize())
         } else if (filteredVideos.isEmpty()) {
             EmptyFeedView(
                 filter = uiState.selectedFilter,
@@ -172,11 +166,13 @@ fun VideoFeedScreen(
                     ReelPlayerItem(
                         video = video,
                         isCurrentPage = isCurrentPage,
-                        isPlaying = uiState.isPlaying && !uiState.isPopupPlayerActive,
+                        isPlaying = uiState.isPlaying,
                         isMuted = uiState.isMuted,
                         playbackSpeed = uiState.playbackSpeed,
                         displayMode = uiState.displayMode,
                         seekToRatio = if (isCurrentPage) seekRatio else null,
+                        isLoopMode = uiState.isLoopMode,
+                        userActionTrigger = uiState.playPauseUserActionTrigger,
                         onProgressUpdate = { cur, tot ->
                             if (isCurrentPage) {
                                 currentProgressMs = cur
@@ -184,24 +180,27 @@ fun VideoFeedScreen(
                             }
                         },
                         onSingleTap = {
-                            areControlsVisible = !areControlsVisible
+                            viewModel.toggleControlsVisibility()
                         },
                         onDoubleTap = {
-                            viewModel.togglePlayPause()
+                            viewModel.likeVideo(video)
                         }
                     )
 
                     // Right Side Action Rail (Clean, minimal, thumb-friendly)
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = areControlsVisible,
+                        visible = uiState.areControlsVisible,
                         enter = androidx.compose.animation.fadeIn(),
                         exit = androidx.compose.animation.fadeOut(),
-                        modifier = Modifier.align(Alignment.BottomEnd)
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .navigationBarsPadding()
+                            .padding(bottom = 84.dp)
                     ) {
                         ActionRail(
                             video = video,
                             isMuted = uiState.isMuted,
-                            onLike = { viewModel.likeVideo(video) },
+                            onLike = { viewModel.toggleFavorite(video) },
                             onOpenPlaylist = { viewModel.openAddToPlaylist(video) },
                             onToggleMute = { viewModel.toggleMute() },
                             onShare = { shareVideo(context, video) },
@@ -211,10 +210,13 @@ fun VideoFeedScreen(
 
                     // Bottom Metadata & TikTok Scrubbing Progress Bar
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = areControlsVisible,
+                        visible = uiState.areControlsVisible,
                         enter = androidx.compose.animation.fadeIn(),
                         exit = androidx.compose.animation.fadeOut(),
-                        modifier = Modifier.align(Alignment.BottomStart)
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .navigationBarsPadding()
+                            .padding(bottom = 84.dp)
                     ) {
                         VideoInfoOverlay(
                             video = video,
@@ -232,7 +234,7 @@ fun VideoFeedScreen(
         // Top Navigation & Filter Bar
         val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         androidx.compose.animation.AnimatedVisibility(
-            visible = areControlsVisible || uiState.isSearchOpen || uiState.searchQuery.isNotEmpty(),
+            visible = uiState.areControlsVisible || uiState.isSearchOpen || uiState.searchQuery.isNotEmpty(),
             enter = androidx.compose.animation.fadeIn(),
             exit = androidx.compose.animation.fadeOut(),
             modifier = Modifier
@@ -274,9 +276,8 @@ fun VideoFeedScreen(
                 },
                 onToggleSearch = { viewModel.toggleSearchOpen() },
                 onRefresh = { viewModel.loadVideos() },
-                onOpenPopup = {
-                    viewModel.openPopupPlayer(filteredVideos.getOrNull(pagerState.currentPage))
-                }
+                onOpenPopup = onEnterPiP,
+                onOpenAllFeatures = { isAllFeaturesOpen = true }
             )
         }
 
@@ -306,9 +307,44 @@ fun VideoFeedScreen(
                 onSelectDisplayMode = { mode -> viewModel.setDisplayMode(mode) },
                 onOpenInfo = { viewModel.openMetadata(targetVideo) },
                 onDelete = { viewModel.requestDeleteConfirmation(targetVideo) },
-                onOpenPopupPlayer = { viewModel.openPopupPlayer(targetVideo) },
                 onEnterPiP = onEnterPiP,
                 onDismiss = { viewModel.closeOptions() }
+            )
+        }
+
+        // All Features & Controls Comprehensive 3-Dots Sheet
+        if (isAllFeaturesOpen) {
+            AllFeaturesSheet(
+                currentVideo = filteredVideos.getOrNull(pagerState.currentPage),
+                displayMode = uiState.displayMode,
+                playbackSpeed = uiState.playbackSpeed,
+                isMuted = uiState.isMuted,
+                isLoopMode = uiState.isLoopMode,
+                isShuffleMode = uiState.isShuffleMode,
+                isGridView = uiState.isGridView,
+                selectedSort = uiState.selectedSort,
+                currentFilter = uiState.selectedFilter,
+                folders = uiState.folders,
+                onSelectDisplayMode = { mode -> viewModel.setDisplayMode(mode) },
+                onSelectSpeed = { speed -> viewModel.setPlaybackSpeed(speed) },
+                onToggleMute = { viewModel.toggleMute() },
+                onToggleLoopMode = { viewModel.toggleLoopMode() },
+                onToggleShuffle = { viewModel.toggleShuffleMode() },
+                onToggleGridView = { viewModel.toggleGridView() },
+                onSelectSort = { sort ->
+                    viewModel.selectSort(sort)
+                    coroutineScope.launch { pagerState.scrollToPage(0) }
+                },
+                onSelectFilter = { filter ->
+                    viewModel.selectFilter(filter)
+                    coroutineScope.launch { pagerState.scrollToPage(0) }
+                },
+                onEnterPiP = onEnterPiP,
+                onRefreshLibrary = { viewModel.loadVideos() },
+                onOpenInfo = { v -> viewModel.openMetadata(v) },
+                onAddToPlaylist = { v -> viewModel.openAddToPlaylist(v) },
+                onClearHistory = { viewModel.clearWatchHistory() },
+                onDismiss = { isAllFeaturesOpen = false }
             )
         }
 

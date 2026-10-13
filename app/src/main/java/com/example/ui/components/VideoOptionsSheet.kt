@@ -58,7 +58,6 @@ fun VideoOptionsSheet(
     onSelectDisplayMode: (VideoDisplayMode) -> Unit,
     onOpenInfo: () -> Unit,
     onDelete: () -> Unit,
-    onOpenPopupPlayer: () -> Unit,
     onEnterPiP: () -> Unit,
     onDismiss: () -> Unit,
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -206,19 +205,19 @@ fun VideoOptionsSheet(
             HorizontalDivider(color = GlassBorderSubtle)
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Pop-up Player Button
+            // System Pop-up / Picture-in-Picture Button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color(0x337C3AED))
-                    .border(1.dp, Color(0x66A78BFA), RoundedCornerShape(12.dp))
+                    .border(1.5.dp, Color(0xFF8B5CF6), RoundedCornerShape(12.dp))
                     .clickable {
                         onDismiss()
-                        onOpenPopupPlayer()
+                        onEnterPiP()
                     }
                     .padding(horizontal = 16.dp, vertical = 14.dp)
-                    .testTag("options_popup_player_button"),
+                    .testTag("options_pip_button"),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -230,53 +229,14 @@ fun VideoOptionsSheet(
                 Spacer(modifier = Modifier.width(14.dp))
                 Column {
                     Text(
-                        text = "Pop-up Mini Player",
+                        text = "System Pop-up Player (PiP)",
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Float video over the app while exploring playlists & library",
+                        text = "Float video on home screen and over any other app",
                         color = Color(0xFFC4B5FD),
-                        fontSize = 11.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // System PiP Button
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(GlassBackground)
-                    .border(1.dp, GlassBorder, RoundedCornerShape(12.dp))
-                    .clickable {
-                        onDismiss()
-                        onEnterPiP()
-                    }
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                    .testTag("options_pip_button"),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.OpenInNew,
-                    contentDescription = null,
-                    tint = Color(0xFF38BDF8),
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(14.dp))
-                Column {
-                    Text(
-                        text = "System Picture-in-Picture",
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Watch in background over other apps and home screen",
-                        color = Color(0xFF94A3B8),
                         fontSize = 11.sp
                     )
                 }

@@ -74,6 +74,7 @@ import com.example.ui.theme.GlassBorder
 import com.example.ui.viewmodel.VideoFeedUiState
 import com.example.ui.viewmodel.VideoFeedViewModel
 import java.util.Locale
+import androidx.compose.foundation.layout.widthIn
 
 sealed class LibrarySubView {
     object Main : LibrarySubView()
@@ -110,35 +111,29 @@ fun LibraryScreen(
             .sortedByDescending { uiState.watchHistoryMap[it.uri.toString()]?.lastPlayedAt ?: 0L }
     }
 
+    androidx.activity.compose.BackHandler(enabled = currentSubView != LibrarySubView.Main) {
+        currentSubView = LibrarySubView.Main
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF090A10))
+            .appBackdrop()
             .padding(top = statusBarPadding)
             .testTag("library_screen")
     ) {
         when (val subView = currentSubView) {
             is LibrarySubView.Main -> {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 80.dp),
+                    modifier = Modifier.widthIn(max = 680.dp).fillMaxSize().align(Alignment.TopCenter),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 128.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     item {
-                        Column {
-                            Text(
-                                text = "Library",
-                                color = Color.White,
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${uiState.allVideos.size} clips • ${uiState.playlists.size} playlists • ${uiState.totalStorageFormatted}",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 14.sp
-                            )
-                        }
+                        ScreenHeader(
+                            title = "Library",
+                            subtitle = "${uiState.allVideos.size} clips • ${uiState.playlists.size} playlists • ${uiState.totalStorageFormatted}"
+                        )
                     }
 
                     // Liked Videos Card
@@ -410,9 +405,10 @@ fun LibraryCard(
     onClick: () -> Unit
 ) {
     Card(
-        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
+            .staggeredEntrance(1)
+            .bounceClick(pressedScale = 0.97f, onClick = onClick)
             .testTag("library_card_${title.lowercase().replace(" ", "_")}"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = GlassBackground)
@@ -712,7 +708,7 @@ fun CollectionDetailView(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 80.dp),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 128.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(videos, key = { it.id }) { video ->

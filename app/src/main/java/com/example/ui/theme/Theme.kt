@@ -20,7 +20,11 @@ private val DarkColorScheme = darkColorScheme(
     onSecondary = Color.White,
     onTertiary = Color.White,
     onBackground = Color.White,
-    onSurface = Color.White
+    onSurface = Color.White,
+    outline = GlassStrokeTop,
+    surfaceContainer = OffDarkSurface,
+    surfaceContainerHigh = Slate900,
+    surfaceContainerHighest = Slate800
 )
 
 @Composable

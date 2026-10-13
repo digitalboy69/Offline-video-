@@ -82,6 +82,12 @@ import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
+private tailrec fun Context.findActivity(): android.app.Activity? = when (this) {
+    is android.app.Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 @OptIn(UnstableApi::class)
 @Composable
 fun ReelPlayerItem(
@@ -92,6 +98,8 @@ fun ReelPlayerItem(
     playbackSpeed: Float,
     displayMode: VideoDisplayMode,
     seekToRatio: Float?,
+    isLoopMode: Boolean = true,
+    userActionTrigger: Long = 0L,
     onProgressUpdate: (currentMs: Long, totalMs: Long) -> Unit,
     onSingleTap: () -> Unit,
     onDoubleTap: (Offset) -> Unit,
@@ -99,9 +107,11 @@ fun ReelPlayerItem(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val coroutineScope = rememberCoroutineScope()
     var isBuffering by remember { mutableStateOf(false) }
     var hasPlaybackError by remember { mutableStateOf(false) }
     var showPlayPauseBadge by remember { mutableStateOf(false) }
+    var lastObservedTrigger by remember { mutableLongStateOf(0L) }
     var doubleTapHeartOffset by remember { mutableStateOf<Offset?>(null) }
     var playerDuration by remember { mutableLongStateOf(video.durationMs) }
     var isAppInForeground by remember { mutableStateOf(true) }
@@ -116,18 +126,31 @@ fun ReelPlayerItem(
     // ExoPlayer reference
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
-            repeatMode = Player.REPEAT_MODE_ONE
+            repeatMode = if (isLoopMode) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
             videoScalingMode = androidx.media3.common.C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
         }
     }
 
-    // Set media item
-    LaunchedEffect(video.uri) {
+    // Set media item and prepare ONLY when this page is active
+    LaunchedEffect(video.uri, isCurrentPage) {
         if (!video.isSample) {
-            val mediaItem = MediaItem.fromUri(video.uri)
-            exoPlayer.setMediaItem(mediaItem)
-            exoPlayer.prepare()
+            if (isCurrentPage) {
+                if (exoPlayer.playbackState == Player.STATE_IDLE || exoPlayer.currentMediaItem == null) {
+                    val mediaItem = MediaItem.fromUri(video.uri)
+                    exoPlayer.setMediaItem(mediaItem)
+                    exoPlayer.prepare()
+                }
+                exoPlayer.playWhenReady = isPlaying && isAppInForeground
+            } else {
+                // Inactive page: immediately pause and release decoder load
+                exoPlayer.pause()
+                exoPlayer.playWhenReady = false
+            }
         }
+    }
+
+    LaunchedEffect(isLoopMode) {
+        exoPlayer.repeatMode = if (isLoopMode) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
     }
 
     // Lifecycle observer for strict no-background-play
@@ -135,11 +158,13 @@ fun ReelPlayerItem(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                    val activity = context.findActivity()
                     val inPiP = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                        (context as? android.app.Activity)?.isInPictureInPictureMode == true
+                        activity?.isInPictureInPictureMode == true
                     } else false
                     if (!inPiP) {
                         isAppInForeground = false
+                        exoPlayer.pause()
                         exoPlayer.playWhenReady = false
                     }
                 }
@@ -148,6 +173,12 @@ fun ReelPlayerItem(
                     if (isCurrentPage && isPlaying) {
                         exoPlayer.playWhenReady = true
                     }
+                }
+                Lifecycle.Event.ON_DESTROY -> {
+                    isAppInForeground = false
+                    exoPlayer.pause()
+                    exoPlayer.stop()
+                    exoPlayer.release()
                 }
                 else -> {}
             }
@@ -184,7 +215,6 @@ fun ReelPlayerItem(
     LaunchedEffect(isCurrentPage, isPlaying, isAppInForeground) {
         while (isActive && isCurrentPage && isAppInForeground) {
             if (video.isSample) {
-                // Synthetic sample timeline loop
                 val current = (SystemClock.uptimeMillis() % (video.durationMs.coerceAtLeast(10000L)))
                 onProgressUpdate(current, video.durationMs.coerceAtLeast(10000L))
             } else {
@@ -223,11 +253,14 @@ fun ReelPlayerItem(
         }
     }
 
-    // Play/Pause icon animation timer
-    LaunchedEffect(isPlaying) {
-        showPlayPauseBadge = true
-        delay(600L)
-        showPlayPauseBadge = false
+    // Play/Pause icon badge: ONLY show on explicit user action trigger, NEVER on scroll!
+    LaunchedEffect(userActionTrigger) {
+        if (userActionTrigger > 0L && userActionTrigger != lastObservedTrigger) {
+            lastObservedTrigger = userActionTrigger
+            showPlayPauseBadge = true
+            delay(650L)
+            showPlayPauseBadge = false
+        }
     }
 
     val resizeModeEnum = when (displayMode) {
@@ -247,6 +280,7 @@ fun ReelPlayerItem(
                         onSingleTap()
                     },
                     onDoubleTap = { offset ->
+                        doubleTapHeartOffset = offset
                         onDoubleTap(offset)
                     }
                 )
@@ -434,38 +468,62 @@ fun FloatingDoubleTapHeart(
     offset: Offset,
     onDismiss: () -> Unit
 ) {
-    val scale = remember { Animatable(0.2f) }
+    val scale = remember { Animatable(0.25f) }
     val alpha = remember { Animatable(1f) }
     val yOffset = remember { Animatable(0f) }
+    val rotation = remember { Animatable(-10f) }
 
     LaunchedEffect(Unit) {
-        scale.animateTo(1.4f, animationSpec = tween(250, easing = FastOutSlowInEasing))
-        scale.animateTo(1.0f, animationSpec = tween(100))
         launch {
-            yOffset.animateTo(-60f, animationSpec = tween(350))
+            scale.animateTo(1.35f, animationSpec = tween(200, easing = FastOutSlowInEasing))
+            scale.animateTo(1.05f, animationSpec = tween(120))
         }
-        alpha.animateTo(0f, animationSpec = tween(350))
+        launch {
+            rotation.animateTo(6f, animationSpec = tween(220))
+            rotation.animateTo(0f, animationSpec = tween(120))
+        }
+        delay(220L)
+        launch {
+            yOffset.animateTo(-80f, animationSpec = tween(340, easing = LinearEasing))
+        }
+        alpha.animateTo(0f, animationSpec = tween(340))
         onDismiss()
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
+        modifier = Modifier.fillMaxSize()
     ) {
-        Icon(
-            imageVector = Icons.Default.Favorite,
-            contentDescription = "Favorited",
-            tint = ComposeColor(0xFFF43F5E),
+        Box(
             modifier = Modifier
-                .size(90.dp)
                 .graphicsLayer {
-                    translationX = offset.x - 110f
-                    translationY = offset.y - 110f + yOffset.value
+                    translationX = offset.x - 120f
+                    translationY = offset.y - 120f + yOffset.value
                     scaleX = scale.value
                     scaleY = scale.value
+                    rotationZ = rotation.value
                     this.alpha = alpha.value
                 }
-        )
+        ) {
+            // Radiant glow aura
+            Icon(
+                imageVector = Icons.Default.Favorite,
+                contentDescription = null,
+                tint = ComposeColor(0x77FB7185),
+                modifier = Modifier
+                    .size(96.dp)
+                    .graphicsLayer {
+                        scaleX = 1.2f
+                        scaleY = 1.2f
+                    }
+            )
+            // Vibrant neon heart
+            Icon(
+                imageVector = Icons.Default.Favorite,
+                contentDescription = "Favorited",
+                tint = ComposeColor(0xFFFB7185),
+                modifier = Modifier.size(96.dp)
+            )
+        }
     }
 }
 

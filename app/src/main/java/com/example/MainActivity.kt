@@ -13,6 +13,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -20,13 +27,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.PermissionRequestScreen
+import com.example.ui.components.SplashOverlay
 import com.example.ui.components.VideoFeedScreen
+import com.example.ui.theme.Slate950
+import kotlinx.coroutines.delay
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.VideoFeedViewModel
 import com.example.ui.viewmodel.VideoFeedViewModelFactory
@@ -78,16 +89,45 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
-                ) { _ ->
-                    com.example.ui.navigation.AppNavigation(
-                        uiState = uiState,
-                        viewModel = viewModel,
-                        onEnterPiP = { enterSystemPiP() },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                var demoMode by rememberSaveable { mutableStateOf(false) }
+                var showSplash by rememberSaveable { mutableStateOf(true) }
+
+                LaunchedEffect(Unit) {
+                    delay(1300)
+                    showSplash = false
+                }
+
+                Box(modifier = Modifier.fillMaxSize().background(Slate950)) {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = Slate950,
+                        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
+                    ) { _ ->
+                        if (hasPermission || demoMode) {
+                            com.example.ui.navigation.AppNavigation(
+                                uiState = uiState,
+                                viewModel = viewModel,
+                                onEnterPiP = { enterSystemPiP() },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            PermissionRequestScreen(
+                                onRequestPermission = { permissionLauncher.launch(requiredPermission) },
+                                onLoadDemoClips = {
+                                    demoMode = true
+                                    viewModel.loadDemoClips()
+                                }
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = showSplash,
+                        enter = fadeIn(tween(0)),
+                        exit = fadeOut(tween(500)) + scaleOut(tween(500), targetScale = 1.06f)
+                    ) {
+                        SplashOverlay()
+                    }
                 }
             }
         }
@@ -117,13 +157,33 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         viewModel.updatePictureInPictureMode(isInPictureInPictureMode)
+        if (!isInPictureInPictureMode && !isChangingConfigurations) {
+            // Exited PiP back to full screen or background
+        }
     }
 
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        val state = viewModel.uiState.value
-        if (state.isPopupPlayerActive || (state.isPlaying && state.filteredVideos.isNotEmpty())) {
-            enterSystemPiP()
+    override fun onPause() {
+        super.onPause()
+        val inPiP = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            isInPictureInPictureMode
+        } else false
+        if (!inPiP) {
+            viewModel.pausePlayback()
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        val inPiP = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            isInPictureInPictureMode
+        } else false
+        if (!inPiP) {
+            viewModel.pausePlayback()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        viewModel.pausePlayback()
     }
 }

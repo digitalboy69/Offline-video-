@@ -27,11 +27,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Swipe
 import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -42,10 +39,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.GlassBackground
-import com.example.ui.theme.GlassBorder
+import com.example.ui.theme.AuroraCyan
+import com.example.ui.theme.AuroraFuchsia
+import com.example.ui.theme.AuroraRose
+import com.example.ui.theme.AuroraViolet
+import com.example.ui.theme.TextMuted
 import com.example.ui.viewmodel.VideoFeedUiState
 import com.example.ui.viewmodel.VideoFeedViewModel
+import androidx.compose.foundation.layout.widthIn
 
 @Composable
 fun SettingsScreen(
@@ -58,170 +59,122 @@ fun SettingsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF090A10))
+            .appBackdrop()
             .padding(top = statusBarPadding)
             .testTag("settings_screen")
     ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 80.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            modifier = Modifier.widthIn(max = 680.dp).fillMaxSize().align(Alignment.TopCenter),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 128.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                Column {
-                    Text(
-                        text = "Settings & Guide",
-                        color = Color.White,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Gesture controls and storage info",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 14.sp
-                    )
-                }
-            }
-
-            // Gesture Cheatsheet
-            item {
-                Text(
-                    text = "Player Gestures",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
+                ScreenHeader(
+                    title = "Settings",
+                    subtitle = "Gestures, storage and about"
                 )
             }
 
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GestureHelpCard(
-                        icon = Icons.Default.Gesture,
-                        title = "Horizontal Drag (VLC Style)",
-                        description = "Drag left or right anywhere on screen to seek forward or backward with live HUD"
-                    )
-                    GestureHelpCard(
-                        icon = Icons.Default.Swipe,
-                        title = "Vertical Swipe",
-                        description = "Swipe up or down to seamlessly switch to the next or previous video"
-                    )
-                    GestureHelpCard(
-                        icon = Icons.Default.TouchApp,
-                        title = "Tap & Double Tap",
-                        description = "Single tap toggles play/pause; double tap left/right skips 10s; double tap center likes video"
-                    )
-                }
+                SectionLabel("Player gestures", Modifier.staggeredEntrance(1))
             }
-
-            // Storage & Library Management
             item {
-                Text(
-                    text = "Storage & Library",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
+                GestureHelpCard(
+                    icon = Icons.Default.Gesture,
+                    title = "Horizontal drag",
+                    description = "Drag left or right anywhere on screen to seek with a live preview HUD.",
+                    tint = AuroraCyan,
+                    modifier = Modifier.staggeredEntrance(2)
+                )
+            }
+            item {
+                GestureHelpCard(
+                    icon = Icons.Default.Swipe,
+                    title = "Vertical swipe",
+                    description = "Swipe up or down to jump to the next or previous video.",
+                    tint = AuroraFuchsia,
+                    modifier = Modifier.staggeredEntrance(3)
+                )
+            }
+            item {
+                GestureHelpCard(
+                    icon = Icons.Default.TouchApp,
+                    title = "Tap & double-tap",
+                    description = "Tap to show or hide controls. Double-tap the sides to skip 10s, the center to like.",
+                    tint = AuroraViolet,
+                    modifier = Modifier.staggeredEntrance(4)
                 )
             }
 
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = GlassBackground)
+                SectionLabel("Storage & library", Modifier.staggeredEntrance(5))
+            }
+            item {
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .staggeredEntrance(6),
+                    contentPadding = PaddingValues(18.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, GlassBorder, RoundedCornerShape(18.dp))
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Storage,
-                                contentDescription = null,
-                                tint = Color(0xFF38BDF8),
-                                modifier = Modifier.size(24.dp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconTile(icon = Icons.Default.Storage, tint = AuroraCyan)
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = "${uiState.allVideos.size} videos indexed",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "${uiState.allVideos.size} Videos Indexed",
-                                    color = Color.White,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Total Size: ${uiState.totalStorageFormatted}",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 13.sp
-                                )
-                            }
+                            Text(
+                                text = "Total size ${uiState.totalStorageFormatted}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
+                            )
                         }
+                    }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = { viewModel.refreshVideos() },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Rescan", fontSize = 13.sp)
-                            }
+                    Spacer(modifier = Modifier.height(18.dp))
 
-                            Button(
-                                onClick = { viewModel.clearWatchHistory() },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B1E2B)),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFB7185), modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Clear History", color = Color(0xFFFB7185), fontSize = 13.sp)
-                            }
-                        }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        GlassButton(
+                            text = "Rescan",
+                            icon = Icons.Default.Refresh,
+                            onClick = { viewModel.refreshVideos() },
+                            modifier = Modifier.weight(1f)
+                        )
+                        GlassButton(
+                            text = "Clear history",
+                            icon = Icons.Default.Delete,
+                            onClick = { viewModel.clearWatchHistory() },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }
 
-            // About
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = GlassBackground)
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .staggeredEntrance(7),
+                    contentPadding = PaddingValues(18.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, GlassBorder, RoundedCornerShape(18.dp))
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = Color(0xFFA78BFA),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconTile(icon = Icons.Default.Info, tint = AuroraRose)
+                        Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
-                                text = "Video Reels Player",
-                                color = Color.White,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
+                                text = "OffScroll",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White
                             )
                             Text(
-                                text = "Version 1.2.0 • Offline Reel Engine",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 12.sp
+                                text = "Version 2.0 Pro • Offline reel engine",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
                             )
                         }
                     }
@@ -232,35 +185,52 @@ fun SettingsScreen(
 }
 
 @Composable
+private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        color = TextMuted,
+        letterSpacing = 1.2.sp,
+        modifier = modifier.padding(top = 10.dp)
+    )
+}
+
+@Composable
+private fun IconTile(icon: ImageVector, tint: Color) {
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .background(tint.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
+            .border(1.dp, tint.copy(alpha = 0.32f), RoundedCornerShape(14.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(24.dp)
+        )
+    }
+}
+
+@Composable
 fun GestureHelpCard(
     icon: ImageVector,
     title: String,
-    description: String
+    description: String,
+    modifier: Modifier = Modifier,
+    tint: Color = AuroraViolet
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(GlassBackground, RoundedCornerShape(16.dp))
-            .border(1.dp, GlassBorder, RoundedCornerShape(16.dp))
-            .padding(14.dp)
+    GlassCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        contentPadding = PaddingValues(14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .background(Color(0xFF7C3AED).copy(alpha = 0.18f), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = Color(0xFFC084FC),
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            IconTile(icon = icon, tint = tint)
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -272,9 +242,9 @@ fun GestureHelpCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = description,
-                    color = Color(0xFF94A3B8),
+                    color = TextMuted,
                     fontSize = 12.sp,
-                    lineHeight = 16.sp
+                    lineHeight = 17.sp
                 )
             }
         }

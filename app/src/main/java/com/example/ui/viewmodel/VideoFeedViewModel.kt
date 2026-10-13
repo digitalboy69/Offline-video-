@@ -32,12 +32,15 @@ data class VideoFeedUiState(
     val displayMode: VideoDisplayMode = VideoDisplayMode.CROP,
     val isShuffleMode: Boolean = false,
     val isGridView: Boolean = false,
+    val isLoopMode: Boolean = true,
+    val areControlsVisible: Boolean = true,
     val searchQuery: String = "",
     val isSearchOpen: Boolean = false,
     val currentIndex: Int = 0,
     val isPlaying: Boolean = true,
     val isMuted: Boolean = false,
     val playbackSpeed: Float = 1.0f,
+    val playPauseUserActionTrigger: Long = 0L,
     val isLoading: Boolean = true,
     val isPermissionGranted: Boolean = true,
     val selectedMetadata: VideoMetadataDetails? = null,
@@ -50,8 +53,6 @@ data class VideoFeedUiState(
     val playlistVideosMap: Map<Long, List<String>> = emptyMap(),
     val playlistForVideo: LocalVideo? = null,
     val optionsForVideo: LocalVideo? = null,
-    val isPopupPlayerActive: Boolean = false,
-    val popupVideo: LocalVideo? = null,
     val isInPictureInPicture: Boolean = false,
     val watchLaterUris: Set<String> = emptySet(),
     val totalStorageFormatted: String = "0 B",
@@ -60,15 +61,37 @@ data class VideoFeedUiState(
 
 class VideoFeedViewModel(
     private val repository: VideoRepository,
-    private val metadataExtractor: MetadataExtractor
+    private val metadataExtractor: MetadataExtractor,
+    private val settingsManager: com.example.data.local.SettingsManager
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(VideoFeedUiState())
-    val uiState: StateFlow<VideoFeedUiState> = _uiState.asStateFlow()
+    private val _uiState: MutableStateFlow<VideoFeedUiState>
+    val uiState: StateFlow<VideoFeedUiState>
 
     private var shuffledVideoIds: List<Long> = emptyList()
+    private var recordJob: kotlinx.coroutines.Job? = null
 
     init {
+        val initialDisplayMode = settingsManager.getDisplayMode()
+        val initialPlaybackSpeed = settingsManager.getPlaybackSpeed()
+        val initialMuted = settingsManager.isMuted()
+        val initialSort = settingsManager.getSortOption()
+        val initialGridView = settingsManager.isGridView()
+        val initialShuffle = settingsManager.isShuffleMode()
+        val initialLoop = settingsManager.isLoopMode()
+
+        _uiState = MutableStateFlow(
+            VideoFeedUiState(
+                displayMode = initialDisplayMode,
+                playbackSpeed = initialPlaybackSpeed,
+                isMuted = initialMuted,
+                selectedSort = initialSort,
+                isGridView = initialGridView,
+                isShuffleMode = initialShuffle,
+                isLoopMode = initialLoop
+            )
+        )
+        uiState = _uiState.asStateFlow()
         observeFavoritesAndWatchHistory()
         loadVideos()
     }
@@ -96,16 +119,29 @@ class VideoFeedViewModel(
                     val updatedAll = state.allVideos.map { video ->
                         video.copy(isFavorite = favMap.containsKey(video.uri.toString()))
                     }
-                    val updatedFiltered = processVideos(
-                        videos = updatedAll,
-                        filter = state.selectedFilter,
-                        sort = state.selectedSort,
-                        isShuffle = state.isShuffleMode,
-                        searchQuery = state.searchQuery,
-                        historyMap = histMap,
-                        watchLaterUris = watchLaterSet,
-                        playlistVideosMap = playlistMap
-                    )
+                    val isFilterAffectedByHistory = state.selectedFilter == FeedFilter.RecentlyPlayed
+                    val isFilterAffectedByWatchLater = state.selectedFilter == FeedFilter.WatchLater
+                    val isFilterAffectedByPlaylist = state.selectedFilter is FeedFilter.Playlist
+
+                    val shouldReprocess = isFilterAffectedByHistory ||
+                        isFilterAffectedByWatchLater ||
+                        isFilterAffectedByPlaylist ||
+                        updatedAll != state.allVideos
+
+                    val updatedFiltered = if (shouldReprocess) {
+                        processVideos(
+                            videos = updatedAll,
+                            filter = state.selectedFilter,
+                            sort = state.selectedSort,
+                            isShuffle = state.isShuffleMode,
+                            searchQuery = state.searchQuery,
+                            historyMap = histMap,
+                            watchLaterUris = watchLaterSet,
+                            playlistVideosMap = playlistMap
+                        )
+                    } else {
+                        state.filteredVideos
+                    }
                     val folders = updatedAll.map { it.bucketDisplayName }.distinct().sorted()
                     val totalBytes = updatedAll.sumOf { it.sizeBytes }
                     state.copy(
@@ -184,6 +220,8 @@ class VideoFeedViewModel(
     }
 
     fun selectSort(sort: SortOption) {
+        settingsManager.setSortOption(sort)
+        settingsManager.setShuffleMode(false)
         _uiState.update { state ->
             val filtered = processVideos(
                 videos = state.allVideos,
@@ -209,8 +247,9 @@ class VideoFeedViewModel(
     }
 
     fun toggleShuffleMode() {
+        val newShuffle = !_uiState.value.isShuffleMode
+        settingsManager.setShuffleMode(newShuffle)
         _uiState.update { state ->
-            val newShuffle = !state.isShuffleMode
             if (newShuffle) {
                 // Generate new random permutation
                 shuffledVideoIds = state.allVideos.map { it.id }.shuffled()
@@ -238,6 +277,7 @@ class VideoFeedViewModel(
     }
 
     fun setDisplayMode(mode: VideoDisplayMode) {
+        settingsManager.setDisplayMode(mode)
         _uiState.update {
             it.copy(
                 displayMode = mode,
@@ -251,6 +291,7 @@ class VideoFeedViewModel(
         _uiState.update { state ->
             val nextIndex = (state.displayMode.ordinal + 1) % modes.size
             val newMode = modes[nextIndex]
+            settingsManager.setDisplayMode(newMode)
             state.copy(
                 displayMode = newMode,
                 toastMessage = "Display: ${newMode.label}"
@@ -298,10 +339,13 @@ class VideoFeedViewModel(
     }
 
     fun toggleGridView() {
-        _uiState.update { it.copy(isGridView = !it.isGridView) }
+        val newGrid = !_uiState.value.isGridView
+        settingsManager.setGridView(newGrid)
+        _uiState.update { it.copy(isGridView = newGrid) }
     }
 
     fun selectVideoFromGrid(index: Int) {
+        settingsManager.setGridView(false)
         _uiState.update { state ->
             val validIndex = index.coerceIn(0, (state.filteredVideos.size - 1).coerceAtLeast(0))
             state.copy(
@@ -454,45 +498,27 @@ class VideoFeedViewModel(
         _uiState.update { it.copy(optionsForVideo = null) }
     }
 
-    fun openPopupPlayer(video: LocalVideo? = null) {
-        val targetVideo = video 
-            ?: _uiState.value.filteredVideos.getOrNull(_uiState.value.currentIndex)
-            ?: _uiState.value.allVideos.firstOrNull()
-        if (targetVideo != null) {
-            _uiState.update {
-                it.copy(
-                    isPopupPlayerActive = true,
-                    popupVideo = targetVideo,
-                    toastMessage = "Floating Pop-up Player active 🎬"
-                )
-            }
-        }
-    }
-
-    fun closePopupPlayer() {
+    fun toggleLoopMode() {
+        val newLoop = !_uiState.value.isLoopMode
+        settingsManager.setLoopMode(newLoop)
         _uiState.update {
             it.copy(
-                isPopupPlayerActive = false,
-                popupVideo = null
+                isLoopMode = newLoop,
+                toastMessage = if (newLoop) "Loop Video Enabled 🔁" else "Loop Video Disabled"
             )
         }
     }
 
-    fun expandPopupPlayer(onNavigateToFeed: () -> Unit) {
-        val currentPopup = _uiState.value.popupVideo
-        _uiState.update { state ->
-            val index = if (currentPopup != null) {
-                val found = state.filteredVideos.indexOfFirst { it.uri == currentPopup.uri }
-                if (found >= 0) found else state.currentIndex
-            } else state.currentIndex
-            state.copy(
-                isPopupPlayerActive = false,
-                popupVideo = null,
-                currentIndex = index,
-                isPlaying = true
-            )
-        }
-        onNavigateToFeed()
+    fun pausePlayback() {
+        _uiState.update { it.copy(isPlaying = false) }
+    }
+
+    fun toggleControlsVisibility() {
+        _uiState.update { it.copy(areControlsVisible = !it.areControlsVisible) }
+    }
+
+    fun setControlsVisible(visible: Boolean) {
+        _uiState.update { it.copy(areControlsVisible = visible) }
     }
 
     fun updatePictureInPictureMode(isInPiP: Boolean) {
@@ -574,7 +600,12 @@ class VideoFeedViewModel(
     }
 
     fun togglePlayPause() {
-        _uiState.update { it.copy(isPlaying = !it.isPlaying) }
+        _uiState.update {
+            it.copy(
+                isPlaying = !it.isPlaying,
+                playPauseUserActionTrigger = System.currentTimeMillis()
+            )
+        }
     }
 
     fun setPlaying(playing: Boolean) {
@@ -582,10 +613,18 @@ class VideoFeedViewModel(
     }
 
     fun toggleMute() {
-        _uiState.update { it.copy(isMuted = !it.isMuted) }
+        val newMuted = !_uiState.value.isMuted
+        settingsManager.setMuted(newMuted)
+        _uiState.update {
+            it.copy(
+                isMuted = newMuted,
+                toastMessage = if (newMuted) "Muted 🔇" else "Sound On 🔊"
+            )
+        }
     }
 
     fun setPlaybackSpeed(speed: Float) {
+        settingsManager.setPlaybackSpeed(speed)
         _uiState.update {
             it.copy(
                 playbackSpeed = speed,
@@ -596,10 +635,11 @@ class VideoFeedViewModel(
 
     fun cyclePlaybackSpeed() {
         val speeds = listOf(0.5f, 1.0f, 1.25f, 1.5f, 2.0f)
+        val currentIdx = speeds.indexOfFirst { kotlin.math.abs(it - _uiState.value.playbackSpeed) < 0.01f }
+        val nextIdx = if (currentIdx in 0 until speeds.size - 1) currentIdx + 1 else 0
+        val newSpeed = speeds[nextIdx]
+        settingsManager.setPlaybackSpeed(newSpeed)
         _uiState.update { state ->
-            val currentIdx = speeds.indexOfFirst { kotlin.math.abs(it - state.playbackSpeed) < 0.01f }
-            val nextIdx = if (currentIdx in 0 until speeds.size - 1) currentIdx + 1 else 0
-            val newSpeed = speeds[nextIdx]
             state.copy(
                 playbackSpeed = newSpeed,
                 toastMessage = "Speed: ${newSpeed}x"
@@ -607,12 +647,12 @@ class VideoFeedViewModel(
         }
     }
 
-    fun likeVideo(video: LocalVideo) {
+    fun toggleFavorite(video: LocalVideo) {
         viewModelScope.launch {
-            repository.likeVideo(video)
+            val isNowFavorite = repository.toggleFavorite(video)
             _uiState.update { state ->
                 val updatedAll = state.allVideos.map {
-                    if (it.uri == video.uri) it.copy(isFavorite = true) else it
+                    if (it.uri == video.uri) it.copy(isFavorite = isNowFavorite) else it
                 }
                 val updatedFiltered = processVideos(
                     videos = updatedAll,
@@ -622,7 +662,7 @@ class VideoFeedViewModel(
                     searchQuery = state.searchQuery,
                     historyMap = state.watchHistoryMap
                 )
-                val toast = if (video.isFavorite) "Already in your Favorites ❤️" else "Added to Favorites ❤️"
+                val toast = if (isNowFavorite) "Added to Favorites ❤️" else "Removed from Favorites"
                 state.copy(
                     allVideos = updatedAll,
                     filteredVideos = updatedFiltered,
@@ -632,7 +672,13 @@ class VideoFeedViewModel(
         }
     }
 
-    fun toggleFavorite(video: LocalVideo) = likeVideo(video)
+    fun likeVideo(video: LocalVideo) {
+        if (!video.isFavorite) {
+            toggleFavorite(video)
+        } else {
+            _uiState.update { it.copy(toastMessage = "Already in your Favorites ❤️") }
+        }
+    }
 
     fun openMetadata(video: LocalVideo) {
         viewModelScope.launch {
@@ -748,7 +794,9 @@ class VideoFeedViewModel(
     }
 
     private fun recordPlayback(video: LocalVideo) {
-        viewModelScope.launch {
+        recordJob?.cancel()
+        recordJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(1200L)
             repository.recordWatchProgress(video, 0L)
         }
     }
@@ -771,7 +819,8 @@ class VideoFeedViewModelFactory(private val context: Context) : ViewModelProvide
         val database = AppDatabase.getDatabase(context)
         val repository = VideoRepository(context, database)
         val metadataExtractor = MetadataExtractor(context)
-        return VideoFeedViewModel(repository, metadataExtractor) as T
+        val settingsManager = com.example.data.local.SettingsManager(context)
+        return VideoFeedViewModel(repository, metadataExtractor, settingsManager) as T
     }
 }
 

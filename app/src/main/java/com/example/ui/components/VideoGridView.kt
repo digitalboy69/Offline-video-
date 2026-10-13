@@ -89,11 +89,11 @@ fun VideoGridView(
         }
     } else {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
+            columns = GridCells.Adaptive(minSize = 100.dp),
             modifier = modifier
                 .fillMaxSize()
                 .testTag("video_grid_view"),
-            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 100.dp, bottom = 32.dp),
+            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 100.dp, bottom = 100.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -118,10 +118,11 @@ private fun VideoGridCard(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(9f / 16f)
-            .clip(RoundedCornerShape(12.dp))
+            .revealOnce(video.id)
+            .bounceClick(pressedScale = 0.95f, onClick = onClick)
+            .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFF1E293B))
-            .border(1.dp, GlassBorderSubtle, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .border(1.dp, GlassBorderSubtle, RoundedCornerShape(16.dp))
             .testTag("video_grid_card_${video.id}")
     ) {
         if (!video.isSample) {

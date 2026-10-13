@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "OffScroll"
+rootProject.name = "NativeStarter"
 
 include(":app")

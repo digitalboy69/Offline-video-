@@ -42,3 +42,19 @@ val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
 
+
+// ── Aurora design system ─────────────────────────────────────────────
+val AppBgTop = Color(0xFF0B0A18)
+val AppBgBottom = Color(0xFF05050C)
+val AuroraViolet = Color(0xFF7C3AED)
+val AuroraFuchsia = Color(0xFFD946EF)
+val AuroraRose = Color(0xFFEC4899)
+val AuroraCyan = Color(0xFF22D3EE)
+val AuroraAmber = Color(0xFFFBBF24)
+val TextPrimary = Color(0xFFF8FAFC)
+val TextSecondary = Color(0xFFCBD5E1)
+val TextMuted = Color(0xFF94A3B8)
+val GlassFillTop = Color(0x1FFFFFFF)
+val GlassFillBottom = Color(0x0AFFFFFF)
+val GlassStrokeTop = Color(0x40FFFFFF)
+val GlassStrokeBottom = Color(0x10FFFFFF)

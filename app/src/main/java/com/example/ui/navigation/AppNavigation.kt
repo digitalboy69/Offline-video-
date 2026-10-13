@@ -1,36 +1,73 @@
 package com.example.ui.navigation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.navigation.NavHostController
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.ui.components.PopupPlayerOverlay
 import com.example.ui.components.VideoFeedScreen
+import com.example.ui.components.bounceClick
+import com.example.ui.components.rememberTickHaptic
+import com.example.ui.theme.AuroraFuchsia
+import com.example.ui.theme.AuroraViolet
+import com.example.ui.theme.GlassStrokeBottom
+import com.example.ui.theme.GlassStrokeTop
+import com.example.ui.theme.TextMuted
 import com.example.ui.viewmodel.VideoFeedUiState
 import com.example.ui.viewmodel.VideoFeedViewModel
-import androidx.compose.ui.unit.dp
 
 enum class NavRoute(val title: String, val icon: ImageVector) {
     Feed("Feed", Icons.Default.Home),
@@ -38,6 +75,8 @@ enum class NavRoute(val title: String, val icon: ImageVector) {
     Library("Library", Icons.Default.VideoLibrary),
     Settings("Settings", Icons.Default.Settings)
 }
+
+private val NavSelected = Color(0xFFE9D5FF)
 
 @Composable
 fun AppNavigation(
@@ -49,67 +88,76 @@ fun AppNavigation(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: NavRoute.Feed.name
+    val tick = rememberTickHaptic()
+
+    val navigateTo: (NavRoute) -> Unit = { route ->
+        if (currentRoute != route.name) {
+            tick()
+            navController.navigate(route.name) {
+                popUpTo(NavRoute.Feed.name) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isCompact = maxWidth < 600.dp
+        val isFeedRoute = currentRoute == NavRoute.Feed.name
+        val isNavVisible = if (isFeedRoute) {
+            uiState.areControlsVisible && !uiState.isInPictureInPicture
+        } else {
+            !uiState.isInPictureInPicture
+        }
 
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            bottomBar = {
-                if (isCompact && !uiState.isInPictureInPicture) {
-                    NavigationBar(
-                        containerColor = Color.Black,
-                        contentColor = Color.White
-                    ) {
-                        NavRoute.values().forEach { route ->
-                            NavigationBarItem(
-                                icon = { Icon(route.icon, contentDescription = route.title) },
-                                label = { Text(route.title) },
-                                selected = currentRoute == route.name,
-                                onClick = {
-                                    if (currentRoute != route.name) {
-                                        navController.navigate(route.name) {
-                                            popUpTo(NavRoute.Feed.name) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                }
-                            )
-                        }
+        Row(modifier = Modifier.fillMaxSize()) {
+            // Wide screens (tablets / foldables / landscape): glass navigation rail
+            this@Row.AnimatedVisibility(
+                visible = !isCompact && isNavVisible,
+                enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
+                exit = slideOutHorizontally(targetOffsetX = { -it }) + fadeOut()
+            ) {
+                NavigationRail(
+                    containerColor = Color(0xF20A0A14),
+                    contentColor = Color.White
+                ) {
+                    NavRoute.values().forEach { route ->
+                        NavigationRailItem(
+                            icon = { Icon(route.icon, contentDescription = route.title) },
+                            label = { Text(route.title) },
+                            selected = currentRoute == route.name,
+                            colors = NavigationRailItemDefaults.colors(
+                                selectedIconColor = NavSelected,
+                                selectedTextColor = NavSelected,
+                                indicatorColor = AuroraViolet.copy(alpha = 0.35f),
+                                unselectedIconColor = TextMuted,
+                                unselectedTextColor = TextMuted
+                            ),
+                            onClick = { navigateTo(route) }
+                        )
                     }
                 }
             }
-        ) { innerPadding ->
-            Row(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                if (!isCompact && !uiState.isInPictureInPicture) {
-                    NavigationRail(
-                        containerColor = Color.Black,
-                        contentColor = Color.White
-                    ) {
-                        NavRoute.values().forEach { route ->
-                            NavigationRailItem(
-                                icon = { Icon(route.icon, contentDescription = route.title) },
-                                label = { Text(route.title) },
-                                selected = currentRoute == route.name,
-                                onClick = {
-                                    if (currentRoute != route.name) {
-                                        navController.navigate(route.name) {
-                                            popUpTo(NavRoute.Feed.name) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
 
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+            ) {
                 NavHost(
                     navController = navController,
                     startDestination = NavRoute.Feed.name,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    enterTransition = {
+                        fadeIn(tween(300, delayMillis = 60)) +
+                            slideInVertically(tween(380, easing = FastOutSlowInEasing)) { it / 28 }
+                    },
+                    exitTransition = { fadeOut(tween(160)) },
+                    popEnterTransition = {
+                        fadeIn(tween(300, delayMillis = 60)) +
+                            slideInVertically(tween(380, easing = FastOutSlowInEasing)) { it / 28 }
+                    },
+                    popExitTransition = { fadeOut(tween(160)) }
                 ) {
                     composable(NavRoute.Feed.name) {
                         VideoFeedScreen(
@@ -153,28 +201,127 @@ fun AppNavigation(
                         )
                     }
                 }
+
+                // Floating glass pill (compact devices)
+                if (isCompact) {
+                    AnimatedVisibility(
+                        visible = isNavVisible,
+                        enter = slideInVertically(
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
+                            initialOffsetY = { it }
+                        ) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    ) {
+                        FloatingNavBar(
+                            currentRoute = currentRoute,
+                            onSelect = navigateTo
+                        )
+                    }
+                }
             }
         }
+    }
+}
 
-        // Floating In-App Pop-up Player
-        if (uiState.isPopupPlayerActive && uiState.popupVideo != null) {
-            PopupPlayerOverlay(
-                video = uiState.popupVideo,
-                isMuted = uiState.isMuted,
-                onToggleMute = { viewModel.toggleMute() },
-                onExpand = {
-                    viewModel.expandPopupPlayer(onNavigateToFeed = {
-                        if (currentRoute != NavRoute.Feed.name) {
-                            navController.navigate(NavRoute.Feed.name) {
-                                popUpTo(NavRoute.Feed.name) { inclusive = false }
-                                launchSingleTop = true
-                            }
-                        }
-                    })
-                },
-                onEnterPiP = onEnterPiP,
-                onClose = { viewModel.closePopupPlayer() }
-            )
+@Composable
+private fun FloatingNavBar(
+    currentRoute: String,
+    onSelect: (NavRoute) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val routes = NavRoute.values()
+    val selectedIndex = routes.indexOfFirst { it.name == currentRoute }.coerceAtLeast(0)
+    val pill = CircleShape
+
+    BoxWithConstraints(
+        modifier = modifier
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .fillMaxWidth()
+            .height(66.dp)
+            .shadow(24.dp, pill, ambientColor = AuroraViolet, spotColor = AuroraViolet)
+            .clip(pill)
+            .background(Color(0xEB0B0B16))
+            .border(1.dp, Brush.verticalGradient(listOf(GlassStrokeTop, GlassStrokeBottom)), pill)
+    ) {
+        val itemWidth = maxWidth / routes.size
+        val indicatorX by animateDpAsState(
+            targetValue = itemWidth * selectedIndex,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+            label = "nav_indicator_x"
+        )
+
+        // Sliding highlight
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorX)
+                .width(itemWidth)
+                .fillMaxHeight()
+                .padding(6.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(AuroraViolet.copy(alpha = 0.55f), AuroraFuchsia.copy(alpha = 0.40f))
+                    )
+                )
+        )
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            routes.forEachIndexed { index, route ->
+                NavPillItem(
+                    route = route,
+                    selected = index == selectedIndex,
+                    onClick = { onSelect(route) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun NavPillItem(
+    route: NavRoute,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val tint by animateColorAsState(
+        targetValue = if (selected) NavSelected else TextMuted,
+        animationSpec = tween(220),
+        label = "nav_tint"
+    )
+    val lift by animateFloatAsState(
+        targetValue = if (selected) 1.14f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "nav_lift"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .bounceClick(pressedScale = 0.9f, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = route.icon,
+            contentDescription = route.title,
+            tint = tint,
+            modifier = Modifier
+                .size(23.dp)
+                .graphicsLayer {
+                    scaleX = lift
+                    scaleY = lift
+                }
+        )
+        Text(
+            text = route.title,
+            color = tint,
+            fontSize = 10.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            modifier = Modifier.padding(top = 3.dp)
+        )
     }
 }
