@@ -56,7 +56,8 @@ data class VideoFeedUiState(
     val isInPictureInPicture: Boolean = false,
     val watchLaterUris: Set<String> = emptySet(),
     val totalStorageFormatted: String = "0 B",
-    val totalCount: Int = 0
+    val totalCount: Int = 0,
+    val hideWatched: Boolean = false
 )
 
 class VideoFeedViewModel(
@@ -597,6 +598,10 @@ class VideoFeedViewModel(
                 state.copy(currentIndex = index)
             }
         }
+    }
+
+    fun toggleHideWatched() {
+        _uiState.update { it.copy(hideWatched = !it.hideWatched) }
     }
 
     fun togglePlayPause() {

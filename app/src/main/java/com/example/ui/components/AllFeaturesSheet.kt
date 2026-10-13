@@ -94,7 +94,7 @@ fun AllFeaturesSheet(
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 ) {
     val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
-    val displayModes = listOf(VideoDisplayMode.CROP, VideoDisplayMode.FIT, VideoDisplayMode.STRETCH)
+    val displayModes = listOf(VideoDisplayMode.CROP, VideoDisplayMode.FIT)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

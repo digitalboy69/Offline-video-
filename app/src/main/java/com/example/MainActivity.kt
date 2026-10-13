@@ -97,10 +97,10 @@ class MainActivity : ComponentActivity() {
                     showSplash = false
                 }
 
-                Box(modifier = Modifier.fillMaxSize().background(Slate950)) {
+                Box(modifier = Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
                     Scaffold(
                         modifier = Modifier.fillMaxSize(),
-                        containerColor = Slate950,
+                        containerColor = androidx.compose.ui.graphics.Color.Black,
                         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
                     ) { _ ->
                         if (hasPermission || demoMode) {

@@ -81,6 +81,14 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 
 private tailrec fun Context.findActivity(): android.app.Activity? = when (this) {
     is android.app.Activity -> this
@@ -100,6 +108,7 @@ fun ReelPlayerItem(
     seekToRatio: Float?,
     isLoopMode: Boolean = true,
     userActionTrigger: Long = 0L,
+    resumeMs: Long = 0L,
     onProgressUpdate: (currentMs: Long, totalMs: Long) -> Unit,
     onSingleTap: () -> Unit,
     onDoubleTap: (Offset) -> Unit,
@@ -112,7 +121,10 @@ fun ReelPlayerItem(
     var hasPlaybackError by remember { mutableStateOf(false) }
     var showPlayPauseBadge by remember { mutableStateOf(false) }
     var lastObservedTrigger by remember { mutableLongStateOf(0L) }
-    var doubleTapHeartOffset by remember { mutableStateOf<Offset?>(null) }
+    var seekFlash by remember { mutableStateOf<SeekFlashState?>(null) }
+    var seekFlashCounter by remember { mutableLongStateOf(0L) }
+    var edgeZone by remember { mutableStateOf(EdgeZone.NONE) }
+    var edgeHud by remember { mutableStateOf<EdgeHud?>(null) }
     var playerDuration by remember { mutableLongStateOf(video.durationMs) }
     var isAppInForeground by remember { mutableStateOf(true) }
     var isTemporarilyFastForwarding by remember { mutableStateOf(false) }
@@ -139,6 +151,10 @@ fun ReelPlayerItem(
                     val mediaItem = MediaItem.fromUri(video.uri)
                     exoPlayer.setMediaItem(mediaItem)
                     exoPlayer.prepare()
+                    // Resume where the viewer left off (ignored near the start or the end)
+                    if (resumeMs > 5_000L && (video.durationMs <= 0L || resumeMs < video.durationMs - 5_000L)) {
+                        exoPlayer.seekTo(resumeMs)
+                    }
                 }
                 exoPlayer.playWhenReady = isPlaying && isAppInForeground
             } else {
@@ -266,7 +282,6 @@ fun ReelPlayerItem(
     val resizeModeEnum = when (displayMode) {
         VideoDisplayMode.CROP -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
         VideoDisplayMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-        VideoDisplayMode.STRETCH -> AspectRatioFrameLayout.RESIZE_MODE_FILL
     }
 
     Box(
@@ -280,8 +295,25 @@ fun ReelPlayerItem(
                         onSingleTap()
                     },
                     onDoubleTap = { offset ->
-                        doubleTapHeartOffset = offset
-                        onDoubleTap(offset)
+                        // Left and right thirds skip 10s; the middle toggles play/pause.
+                        val width = size.width.toFloat()
+                        val zone = when {
+                            offset.x < width * 0.35f -> -1
+                            offset.x > width * 0.65f -> 1
+                            else -> 0
+                        }
+                        if (zone != 0) {
+                            if (!video.isSample) {
+                                val total = exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                val target = (exoPlayer.currentPosition + zone * 10_000L).coerceIn(0L, total)
+                                exoPlayer.seekTo(target)
+                                onProgressUpdate(target, if (playerDuration > 0) playerDuration else video.durationMs)
+                            }
+                            seekFlashCounter += 1
+                            seekFlash = SeekFlashState(id = seekFlashCounter, forward = zone > 0)
+                        } else {
+                            onDoubleTap(offset)
+                        }
                     }
                 )
             }
@@ -319,6 +351,31 @@ fun ReelPlayerItem(
                     onDragCancel = {
                         isHorizontalDragging = false
                     }
+                )
+            }
+            .pointerInput(video.id) {
+                detectVerticalDragGestures(
+                    onDragStart = { offset ->
+                        edgeZone = when {
+                            offset.x < size.width * 0.2f -> EdgeZone.BRIGHTNESS
+                            offset.x > size.width * 0.8f -> EdgeZone.VOLUME
+                            else -> EdgeZone.NONE
+                        }
+                    },
+                    onVerticalDrag = { change, dragAmount ->
+                        if (edgeZone != EdgeZone.NONE) {
+                            change.consume()
+                            val delta = -dragAmount / (size.height * 0.8f)
+                            val level = if (edgeZone == EdgeZone.BRIGHTNESS) {
+                                setBrightness(context, currentBrightness(context) + delta)
+                            } else {
+                                setVolume(context, currentVolume(context) + delta)
+                            }
+                            edgeHud = EdgeHud(zone = edgeZone, level = level, id = System.nanoTime())
+                        }
+                    },
+                    onDragEnd = { edgeZone = EdgeZone.NONE },
+                    onDragCancel = { edgeZone = EdgeZone.NONE }
                 )
             }
     ) {
@@ -438,11 +495,17 @@ fun ReelPlayerItem(
             }
         }
 
-        // Double tap floating heart animation
-        doubleTapHeartOffset?.let { offset ->
-            FloatingDoubleTapHeart(
-                offset = offset,
-                onDismiss = { doubleTapHeartOffset = null }
+        // Edge gestures: brightness or volume level while dragging the screen edges
+        edgeHud?.let { hud ->
+            EdgeHudOverlay(hud = hud, onDone = { if (edgeHud?.id == hud.id) edgeHud = null })
+        }
+
+        // Double-tap feedback: a 10s badge on the side that was tapped
+        seekFlash?.let { flash ->
+            SeekFlashBadge(
+                forward = flash.forward,
+                key = flash.id,
+                onDone = { if (seekFlash?.id == flash.id) seekFlash = null }
             )
         }
 
@@ -706,3 +769,53 @@ private fun formatVlcTime(ms: Long): String {
     return String.format(java.util.Locale.US, "%02d:%02d", min, sec)
 }
 
+
+// ───────────── Double-tap skip feedback (left / right side) ─────────────
+
+private data class SeekFlashState(val id: Long, val forward: Boolean)
+
+@Composable
+private fun BoxScope.SeekFlashBadge(
+    forward: Boolean,
+    key: Long,
+    onDone: () -> Unit
+) {
+    var visible by remember(key) { mutableStateOf(true) }
+    LaunchedEffect(key) {
+        delay(650)
+        visible = false
+        onDone()
+    }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(120)) + scaleIn(tween(160), initialScale = 0.7f),
+        exit = fadeOut(tween(260)) + scaleOut(tween(260), targetScale = 1.15f),
+        modifier = Modifier
+            .align(if (forward) Alignment.CenterEnd else Alignment.CenterStart)
+            .padding(horizontal = 40.dp)
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(68.dp)
+                    .background(ComposeColor(0x66000000), CircleShape)
+                    .border(1.dp, ComposeColor.White.copy(alpha = 0.25f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (forward) Icons.Default.FastForward else Icons.Default.FastRewind,
+                    contentDescription = null,
+                    tint = ComposeColor.White,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "10s",
+                color = ComposeColor.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}

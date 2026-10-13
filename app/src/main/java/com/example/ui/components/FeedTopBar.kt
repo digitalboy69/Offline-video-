@@ -67,6 +67,9 @@ import com.example.ui.theme.FrostedRose
 import com.example.ui.theme.GlassBackground
 import com.example.ui.theme.GlassBorder
 import com.example.ui.theme.GlassBorderSubtle
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.Check
 
 @Composable
 fun FeedTopBar(
@@ -77,6 +80,7 @@ fun FeedTopBar(
     searchQuery: String,
     isSearchOpen: Boolean,
     folders: List<String>,
+    folderCounts: Map<String, Int> = emptyMap(),
     totalVideosCount: Int,
     currentIndex: Int,
     totalStorageFormatted: String,
@@ -100,7 +104,7 @@ fun FeedTopBar(
             .fillMaxWidth()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color(0xF0020617), Color(0x99020617), Color.Transparent)
+                    colors = listOf(Color(0xF0000000), Color(0x99000000), Color.Transparent)
                 )
             )
             .padding(horizontal = 14.dp, vertical = 6.dp)
@@ -221,10 +225,42 @@ fun FeedTopBar(
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
                             )
                             folders.forEach { folderName ->
+                                val count = folderCounts[folderName] ?: 0
+                                val selected = (currentFilter as? FeedFilter.ByFolder)?.folderName == folderName
                                 DropdownMenuItem(
-                                    text = { Text(folderName, color = Color(0xFFE2E8F0)) },
+                                    modifier = Modifier.padding(horizontal = 6.dp),
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = folderName,
+                                                color = Color.White,
+                                                fontSize = 14.sp,
+                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "$count videos",
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                    },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Folder, contentDescription = null, tint = Color(0xFFFBBF24))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(RoundedCornerShape(11.dp))
+                                                .background(Brush.linearGradient(listOf(Color(0xFF7C3AED), Color(0xFFEC4899)))),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Default.Folder, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                        }
+                                    },
+                                    trailingIcon = {
+                                        if (selected) {
+                                            Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFFA78BFA))
+                                        }
                                     },
                                     onClick = {
                                         onSelectFilter(FeedFilter.ByFolder(folderName))

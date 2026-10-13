@@ -47,6 +47,8 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.viewmodel.VideoFeedUiState
 import com.example.ui.viewmodel.VideoFeedViewModel
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Switch
+import androidx.compose.material.icons.filled.VisibilityOff
 
 @Composable
 fun SettingsScreen(
@@ -100,12 +102,41 @@ fun SettingsScreen(
                 GestureHelpCard(
                     icon = Icons.Default.TouchApp,
                     title = "Tap & double-tap",
-                    description = "Tap to show or hide controls. Double-tap the sides to skip 10s, the center to like.",
+                    description = "Tap to show or hide controls. Double-tap the center to play or pause, and the sides to skip 10 seconds.",
                     tint = AuroraViolet,
                     modifier = Modifier.staggeredEntrance(4)
                 )
             }
 
+            item {
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .staggeredEntrance(4),
+                    contentPadding = PaddingValues(18.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconTile(icon = Icons.Default.VisibilityOff, tint = AuroraFuchsia)
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Hide watched videos",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Videos you've played are hidden from the feed and search.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
+                            )
+                        }
+                        Switch(
+                            checked = uiState.hideWatched,
+                            onCheckedChange = { viewModel.toggleHideWatched() }
+                        )
+                    }
+                }
+            }
             item {
                 SectionLabel("Storage & library", Modifier.staggeredEntrance(5))
             }
@@ -172,7 +203,7 @@ fun SettingsScreen(
                                 color = Color.White
                             )
                             Text(
-                                text = "Version 2.0 Pro • Offline reel engine",
+                                text = "Version 2.2 Pro • Offline reel engine",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextMuted
                             )

@@ -44,6 +44,7 @@ import com.example.ui.viewmodel.VideoFeedViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.widthIn
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +58,16 @@ fun VideoFeedScreen(
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val filteredVideos = uiState.filteredVideos
+    val folderCounts = remember(uiState.allVideos) {
+        uiState.allVideos.groupingBy { it.bucketDisplayName }.eachCount()
+    }
+    val filteredVideos = remember(uiState.filteredVideos, uiState.hideWatched, uiState.watchHistoryMap) {
+        if (uiState.hideWatched) {
+            uiState.filteredVideos.filterNot { isWatched(uiState.watchHistoryMap, it) }
+        } else {
+            uiState.filteredVideos
+        }
+    }
     val pagerState = rememberPagerState(
         initialPage = 0,
         pageCount = { filteredVideos.size }
@@ -139,6 +149,7 @@ fun VideoFeedScreen(
             // 3-Column Frosted Grid View
             VideoGridView(
                 videos = filteredVideos,
+                progressOf = { video -> watchFraction(uiState.watchHistoryMap, video) },
                 onSelectVideo = { index ->
                     viewModel.toggleGridView()
                     coroutineScope.launch {
@@ -152,7 +163,9 @@ fun VideoFeedScreen(
             VerticalPager(
                 state = pagerState,
                 modifier = Modifier
+                    .widthIn(max = 560.dp)
                     .fillMaxSize()
+                    .align(Alignment.TopCenter)
                     .testTag("vertical_video_pager"),
                 key = { page ->
                     if (page in filteredVideos.indices) filteredVideos[page].id else page
@@ -166,6 +179,7 @@ fun VideoFeedScreen(
                     ReelPlayerItem(
                         video = video,
                         isCurrentPage = isCurrentPage,
+                        resumeMs = uiState.watchHistoryMap[video.uri.toString()]?.lastPositionMs ?: 0L,
                         isPlaying = uiState.isPlaying,
                         isMuted = uiState.isMuted,
                         playbackSpeed = uiState.playbackSpeed,
@@ -183,7 +197,7 @@ fun VideoFeedScreen(
                             viewModel.toggleControlsVisibility()
                         },
                         onDoubleTap = {
-                            viewModel.likeVideo(video)
+                            viewModel.togglePlayPause()
                         }
                     )
 
@@ -249,6 +263,7 @@ fun VideoFeedScreen(
                 searchQuery = uiState.searchQuery,
                 isSearchOpen = uiState.isSearchOpen,
                 folders = uiState.folders,
+                folderCounts = folderCounts,
                 totalVideosCount = filteredVideos.size,
                 currentIndex = pagerState.currentPage,
                 totalStorageFormatted = uiState.totalStorageFormatted,
