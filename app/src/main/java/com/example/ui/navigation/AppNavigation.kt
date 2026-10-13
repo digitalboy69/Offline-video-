@@ -204,7 +204,8 @@ fun AppNavigation(
 
                 // Floating glass pill (compact devices)
                 if (isCompact) {
-                    AnimatedVisibility(
+                    // Fully qualified: inside Row, the bare name would resolve to RowScope.AnimatedVisibility.
+                    androidx.compose.animation.AnimatedVisibility(
                         visible = isNavVisible,
                         enter = slideInVertically(
                             animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
