@@ -29,14 +29,20 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
+      # GitHub's Ubuntu runners already include the Android SDK, so no setup action is needed.
+      # Install the platform the build targets if the runner's sdkmanager is available.
+      - name: Make sure Android SDK platforms are installed
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools" || true
-          sdkmanager "platforms;android-36.1" || true
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          echo "Android SDK: $SDK"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          SDKMANAGER="$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -n 1)"
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+            "$SDKMANAGER" "platforms;android-36" "platforms;android-36.1" "build-tools;36.0.0" > /dev/null || true
+          else
+            echo "sdkmanager not found: Gradle will fetch missing SDK parts itself."
+          fi
 
       - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
