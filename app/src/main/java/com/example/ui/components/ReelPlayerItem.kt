@@ -156,7 +156,7 @@ fun ReelPlayerItem(
         if (!video.isSample) {
             if (isCurrentPage) {
                 // Load this video if the player is not already on it (checks the real media, not just its state)
-                if (exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString() != video.uri) {
+                if (exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString() != video.uri.toString()) {
                     firstFrame.value = false
                     val mediaItem = MediaItem.fromUri(video.uri)
                     exoPlayer.setMediaItem(mediaItem)
