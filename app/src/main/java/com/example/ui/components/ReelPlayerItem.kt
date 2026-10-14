@@ -88,7 +88,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.abs
 
 private tailrec fun Context.findActivity(): android.app.Activity? = when (this) {
     is android.app.Activity -> this
@@ -123,8 +128,8 @@ fun ReelPlayerItem(
     var lastObservedTrigger by remember { mutableLongStateOf(0L) }
     var seekFlash by remember { mutableStateOf<SeekFlashState?>(null) }
     var seekFlashCounter by remember { mutableLongStateOf(0L) }
-    var edgeZone by remember { mutableStateOf(EdgeZone.NONE) }
-    var edgeHud by remember { mutableStateOf<EdgeHud?>(null) }
+    var edgeSize by remember { mutableStateOf(IntSize.Zero) }
+    val edgeHud = remember { mutableStateOf<EdgeHud?>(null) }
     var playerDuration by remember { mutableLongStateOf(video.durationMs) }
     var isAppInForeground by remember { mutableStateOf(true) }
     var isTemporarilyFastForwarding by remember { mutableStateOf(false) }
@@ -353,30 +358,40 @@ fun ReelPlayerItem(
                     }
                 )
             }
+            .onSizeChanged { edgeSize = it }
             .pointerInput(video.id) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset ->
-                        edgeZone = when {
-                            offset.x < size.width * 0.2f -> EdgeZone.BRIGHTNESS
-                            offset.x > size.width * 0.8f -> EdgeZone.VOLUME
-                            else -> EdgeZone.NONE
-                        }
-                    },
-                    onVerticalDrag = { change, dragAmount ->
-                        if (edgeZone != EdgeZone.NONE) {
+                // Only a drag that starts on a screen edge is claimed here.
+                // Drags from the middle are left alone, so normal page swiping keeps working.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val width = edgeSize.width.toFloat()
+                    val height = edgeSize.height.toFloat()
+                    val x = down.position.x
+                    val zone = when {
+                        width <= 0f -> EdgeZone.NONE
+                        x < width * 0.2f -> EdgeZone.BRIGHTNESS
+                        x > width * 0.8f -> EdgeZone.VOLUME
+                        else -> EdgeZone.NONE
+                    }
+                    if (zone == EdgeZone.NONE) return@awaitEachGesture
+                    // Start from the real level, then keep a running value so small moves add up smoothly
+                    var level = if (zone == EdgeZone.BRIGHTNESS) currentBrightness(context) else currentVolume(context)
+                    val hudId = System.nanoTime()
+                    drag(down.id) { change ->
+                        val dy = change.position.y - change.previousPosition.y
+                        val dx = change.position.x - change.previousPosition.x
+                        if (abs(dy) > abs(dx)) {
                             change.consume()
-                            val delta = -dragAmount / (size.height * 0.8f)
-                            val level = if (edgeZone == EdgeZone.BRIGHTNESS) {
-                                setBrightness(context, currentBrightness(context) + delta)
+                            level = (level - dy / (height * 0.8f)).coerceIn(0f, 1f)
+                            level = if (zone == EdgeZone.BRIGHTNESS) {
+                                setBrightness(context, level)
                             } else {
-                                setVolume(context, currentVolume(context) + delta)
+                                setVolume(context, level)
                             }
-                            edgeHud = EdgeHud(zone = edgeZone, level = level, id = System.nanoTime())
+                            edgeHud.value = EdgeHud(zone = zone, level = level, id = hudId)
                         }
-                    },
-                    onDragEnd = { edgeZone = EdgeZone.NONE },
-                    onDragCancel = { edgeZone = EdgeZone.NONE }
-                )
+                    }
+                }
             }
     ) {
         if (video.isSample) {
@@ -496,9 +511,7 @@ fun ReelPlayerItem(
         }
 
         // Edge gestures: brightness or volume level while dragging the screen edges
-        edgeHud?.let { hud ->
-            EdgeHudOverlay(hud = hud, onDone = { if (edgeHud?.id == hud.id) edgeHud = null })
-        }
+        EdgeHudOverlay(hudState = edgeHud)
 
         // Double-tap feedback: a 10s badge on the side that was tapped
         seekFlash?.let { flash ->

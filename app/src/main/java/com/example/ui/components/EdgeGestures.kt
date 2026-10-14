@@ -4,8 +4,10 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.media.AudioManager
+import android.provider.Settings
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -19,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.WbSunny
@@ -27,12 +28,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -56,10 +59,15 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
+/** Current brightness 0..1: this window's value when set, otherwise the system value. */
 fun currentBrightness(context: Context): Float {
-    val activity = context.findActivity() ?: return 0.5f
-    val value = activity.window.attributes.screenBrightness
-    return if (value < 0f) 0.5f else value
+    val windowValue = context.findActivity()?.window?.attributes?.screenBrightness ?: -1f
+    if (windowValue >= 0f) return windowValue
+    return try {
+        Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS) / 255f
+    } catch (e: Exception) {
+        0.5f
+    }
 }
 
 /** Sets this window's brightness only (other apps are not affected). Returns the applied level. */
@@ -78,24 +86,37 @@ fun currentVolume(context: Context): Float {
     return audio.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
 }
 
-/** Sets media volume to a 0..1 level. Returns the applied level. */
+/** Sets media volume to a 0..1 level. Only calls the system when the whole step changes. */
 fun setVolume(context: Context, level: Float): Float {
     val clamped = level.coerceIn(0f, 1f)
     val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-    audio.setStreamVolume(AudioManager.STREAM_MUSIC, (clamped * max).roundToInt(), 0)
+    val target = (clamped * max).roundToInt().coerceIn(0, max)
+    if (audio.getStreamVolume(AudioManager.STREAM_MUSIC) != target) {
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
+    }
     return clamped
 }
 
-/** Vertical level indicator shown while dragging on a screen edge. Fades out after a short pause. */
+/**
+ * Level bar shown while dragging an edge. It reads the state itself, so only this small
+ * overlay redraws on each drag step, not the whole reel.
+ */
 @Composable
-fun BoxScope.EdgeHudOverlay(hud: EdgeHud, onDone: () -> Unit) {
+fun BoxScope.EdgeHudOverlay(hudState: MutableState<EdgeHud?>) {
+    val hud = hudState.value ?: return
     var visible by remember(hud.id) { mutableStateOf(true) }
-    LaunchedEffect(hud.id) {
+    // Every level change keeps the bar visible; it fades about 0.9s after the finger stops
+    LaunchedEffect(hud.id, hud.level) {
+        visible = true
         delay(900)
         visible = false
-        onDone()
     }
+    val shownLevel by animateFloatAsState(
+        targetValue = hud.level,
+        animationSpec = tween(durationMillis = 90),
+        label = "edge_hud_level"
+    )
     val isBrightness = hud.zone == EdgeZone.BRIGHTNESS
     androidx.compose.animation.AnimatedVisibility(
         visible = visible,
@@ -124,13 +145,13 @@ fun BoxScope.EdgeHudOverlay(hud: EdgeHud, onDone: () -> Unit) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight(hud.level.coerceIn(0f, 1f))
+                        .fillMaxHeight(shownLevel.coerceIn(0f, 1f))
                         .background(Brush.verticalGradient(listOf(AuroraFuchsia, AuroraViolet)))
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "${(hud.level * 100).roundToInt()}%",
+                text = "${(shownLevel * 100).roundToInt()}%",
                 color = Color.White,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold

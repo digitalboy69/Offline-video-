@@ -86,6 +86,19 @@ jobs:
       - name: Build debug and release APKs
         run: gradle :app:assembleDebug :app:assembleRelease --stacktrace
 
+      # Play Store upload format. Optional: a failure here does not stop the APK builds.
+      - name: Build Play Store bundle (AAB)
+        continue-on-error: true
+        run: gradle :app:bundleRelease --stacktrace
+
+      - name: Upload Play Store bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OffScroll-release-aab
+          path: app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: ignore
+
       - name: Collect APKs
         run: |
           mkdir -p dist
