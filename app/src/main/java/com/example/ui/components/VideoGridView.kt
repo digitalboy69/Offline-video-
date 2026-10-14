@@ -49,6 +49,8 @@ import com.example.ui.theme.AuroraViolet
 import com.example.ui.theme.GlassBorderSubtle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 // Thumbnails are scaled down before caching, so 80 of them stay well inside the heap.
 private object ThumbnailCache {
@@ -56,6 +58,9 @@ private object ThumbnailCache {
     fun get(id: Long): Bitmap? = cache.get(id)
     fun put(id: Long, bitmap: Bitmap) { cache.put(id, bitmap) }
 }
+
+// At most three frames are decoded at once; more overloads the decoder and makes frames fail
+private val thumbnailPermits = Semaphore(3)
 
 private fun loadThumbnail(context: Context, uri: Uri): Bitmap? {
     val retriever = MediaMetadataRetriever()
@@ -87,7 +92,7 @@ fun VideoThumbnail(video: LocalVideo, modifier: Modifier = Modifier) {
         key2 = video.uri
     ) {
         if (value == null && !video.isSample) {
-            val loaded = withContext(Dispatchers.IO) { loadThumbnail(context, video.uri) }
+            val loaded = withContext(Dispatchers.IO) { thumbnailPermits.withPermit { loadThumbnail(context, video.uri) } }
             if (loaded != null) ThumbnailCache.put(video.id, loaded)
             value = loaded
         }

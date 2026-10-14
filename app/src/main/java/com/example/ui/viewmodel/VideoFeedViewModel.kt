@@ -798,6 +798,19 @@ class VideoFeedViewModel(
         }
     }
 
+    private var lastSavedUri: String? = null
+    private var lastSavedPositionMs = 0L
+
+    /** Saves the resume position about every 5 seconds of playback, and whenever a different video starts. */
+    fun savePlaybackPosition(video: LocalVideo, positionMs: Long) {
+        if (video.isSample || positionMs <= 0L) return
+        val uri = video.uri.toString()
+        if (uri == lastSavedUri && kotlin.math.abs(positionMs - lastSavedPositionMs) < 5_000L) return
+        lastSavedUri = uri
+        lastSavedPositionMs = positionMs
+        viewModelScope.launch { repository.saveWatchPosition(video, positionMs) }
+    }
+
     private fun recordPlayback(video: LocalVideo) {
         recordJob?.cancel()
         recordJob = viewModelScope.launch {

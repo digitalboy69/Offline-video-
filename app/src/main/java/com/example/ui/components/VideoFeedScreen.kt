@@ -61,7 +61,7 @@ fun VideoFeedScreen(
     val folderCounts = remember(uiState.allVideos) {
         uiState.allVideos.groupingBy { it.bucketDisplayName }.eachCount()
     }
-    val filteredVideos = remember(uiState.filteredVideos, uiState.hideWatched, uiState.watchHistoryMap) {
+    val filteredVideos = remember(uiState.filteredVideos, uiState.hideWatched) {
         if (uiState.hideWatched) {
             uiState.filteredVideos.filterNot { isWatched(uiState.watchHistoryMap, it) }
         } else {
@@ -191,6 +191,7 @@ fun VideoFeedScreen(
                             if (isCurrentPage) {
                                 currentProgressMs = cur
                                 currentTotalMs = tot
+                                viewModel.savePlaybackPosition(video, cur)
                             }
                         },
                         onSingleTap = {

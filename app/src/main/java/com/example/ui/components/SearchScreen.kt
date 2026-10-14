@@ -371,15 +371,7 @@ private fun ContinueCard(
                 .border(1.dp, GlassStrokeTop, shape)
         ) {
             if (!video.isSample) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(video.uri)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = video.displayName,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                VideoThumbnail(video = video, modifier = Modifier.fillMaxSize())
             } else {
                 Box(
                     modifier = Modifier

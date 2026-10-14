@@ -288,15 +288,29 @@ class VideoRepository(
         }
     }
 
+    /** Counts a play. Keeps the saved resume position unless a new one is given. */
     suspend fun recordWatchProgress(video: LocalVideo, positionMs: Long) = withContext(Dispatchers.IO) {
         val uriStr = video.uri.toString()
         val existing = watchHistoryDao.getWatchHistory(uriStr)
-        val playCount = (existing?.playCount ?: 0) + 1
         watchHistoryDao.recordWatch(
             WatchHistory(
                 videoUri = uriStr,
                 lastPlayedAt = System.currentTimeMillis(),
-                playCount = playCount,
+                playCount = (existing?.playCount ?: 0) + 1,
+                lastPositionMs = if (positionMs > 0L) positionMs else (existing?.lastPositionMs ?: 0L)
+            )
+        )
+    }
+
+    /** Saves where the viewer stopped, so the video can resume there. Does not change the play count. */
+    suspend fun saveWatchPosition(video: LocalVideo, positionMs: Long) = withContext(Dispatchers.IO) {
+        val uriStr = video.uri.toString()
+        val existing = watchHistoryDao.getWatchHistory(uriStr)
+        watchHistoryDao.recordWatch(
+            WatchHistory(
+                videoUri = uriStr,
+                lastPlayedAt = existing?.lastPlayedAt ?: System.currentTimeMillis(),
+                playCount = existing?.playCount ?: 0,
                 lastPositionMs = positionMs
             )
         )

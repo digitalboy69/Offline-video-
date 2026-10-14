@@ -148,11 +148,16 @@ fun ReelPlayerItem(
         }
     }
 
+    // True once the first real frame is on screen; until then the video's poster is shown
+    val firstFrame = remember(video.uri) { mutableStateOf(false) }
+
     // Set media item and prepare ONLY when this page is active
     LaunchedEffect(video.uri, isCurrentPage) {
         if (!video.isSample) {
             if (isCurrentPage) {
-                if (exoPlayer.playbackState == Player.STATE_IDLE || exoPlayer.currentMediaItem == null) {
+                // Load this video if the player is not already on it (checks the real media, not just its state)
+                if (exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString() != video.uri) {
+                    firstFrame.value = false
                     val mediaItem = MediaItem.fromUri(video.uri)
                     exoPlayer.setMediaItem(mediaItem)
                     exoPlayer.prepare()
@@ -199,7 +204,6 @@ fun ReelPlayerItem(
                     isAppInForeground = false
                     exoPlayer.pause()
                     exoPlayer.stop()
-                    exoPlayer.release()
                 }
                 else -> {}
             }
@@ -259,6 +263,10 @@ fun ReelPlayerItem(
                         playerDuration = exoPlayer.duration
                     }
                 }
+            }
+
+            override fun onRenderedFirstFrame() {
+                firstFrame.value = true
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -377,12 +385,14 @@ fun ReelPlayerItem(
                     // Start from the real level, then keep a running value so small moves add up smoothly
                     var level = if (zone == EdgeZone.BRIGHTNESS) currentBrightness(context) else currentVolume(context)
                     val hudId = System.nanoTime()
+                    val sensitivity = EdgeSensitivity()
                     drag(down.id) { change ->
                         val dy = change.position.y - change.previousPosition.y
                         val dx = change.position.x - change.previousPosition.x
                         if (abs(dy) > abs(dx)) {
                             change.consume()
-                            level = (level - dy / (height * 0.8f)).coerceIn(0f, 1f)
+                            val dt = change.uptimeMillis - change.previousUptimeMillis
+                            level = (level + sensitivity.step(-dy, dt, height)).coerceIn(0f, 1f)
                             level = if (zone == EdgeZone.BRIGHTNESS) {
                                 setBrightness(context, level)
                             } else {
@@ -421,6 +431,10 @@ fun ReelPlayerItem(
                 },
                 modifier = Modifier.fillMaxSize()
             )
+            // Poster until the first frame is shown, so the reel never flashes black
+            if (!firstFrame.value && !video.isSample && !hasPlaybackError) {
+                VideoThumbnail(video = video, modifier = Modifier.fillMaxSize())
+            }
         }
 
         // Buffering Indicator

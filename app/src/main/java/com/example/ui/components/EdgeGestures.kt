@@ -45,6 +45,7 @@ import com.example.ui.theme.AuroraFuchsia
 import com.example.ui.theme.AuroraViolet
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import kotlin.math.abs
 
 enum class EdgeZone { NONE, BRIGHTNESS, VOLUME }
 
@@ -157,5 +158,28 @@ fun BoxScope.EdgeHudOverlay(hudState: MutableState<EdgeHud?>) {
                 fontWeight = FontWeight.Bold
             )
         }
+    }
+}
+
+
+/**
+ * Turns finger movement into a level change, adapting to how fast and how far you drag.
+ * Quick flicks move further, and a long drag speeds up, so careful moves stay precise
+ * and big moves still cover the whole range.
+ */
+class EdgeSensitivity {
+    private var smoothedSpeed = 0f   // pixels per millisecond, smoothed so one jittery event can't jump
+    private var travelled = 0f       // pixels moved since this gesture started
+
+    /** [dyUp] is positive when the finger moves up. Returns the level change for this step. */
+    fun step(dyUp: Float, dtMs: Long, heightPx: Float): Float {
+        if (heightPx <= 0f) return 0f
+        travelled += abs(dyUp)
+        val instantSpeed = if (dtMs > 0L) abs(dyUp) / dtMs else 0f
+        smoothedSpeed = smoothedSpeed * 0.75f + instantSpeed * 0.25f
+        val base = dyUp / (heightPx * 0.5f)                                    // about 1.6x the old reach
+        val speedBoost = 1f + (smoothedSpeed / 1.5f).coerceIn(0f, 2f)          // fast flicks move up to 3x
+        val depthBoost = 1f + (travelled / heightPx * 1.2f).coerceAtMost(1.2f) // long drags speed up
+        return base * speedBoost * depthBoost
     }
 }
