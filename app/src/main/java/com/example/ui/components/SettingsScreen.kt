@@ -203,7 +203,7 @@ fun SettingsScreen(
                                 color = Color.White
                             )
                             Text(
-                                text = "Version 2.2 Pro • Offline reel engine",
+                                text = "Version 2.3 Pro • Offline reel engine",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextMuted
                             )

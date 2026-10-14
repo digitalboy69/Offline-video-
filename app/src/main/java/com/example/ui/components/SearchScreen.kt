@@ -81,6 +81,23 @@ import com.example.ui.theme.GlassStrokeTop
 import com.example.ui.theme.TextMuted
 import com.example.ui.viewmodel.VideoFeedUiState
 import com.example.ui.viewmodel.VideoFeedViewModel
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ArrowBack
+import com.example.ui.theme.GlassBorderSubtle
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SearchScreen(
@@ -91,6 +108,7 @@ fun SearchScreen(
 ) {
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var query by rememberSaveable { mutableStateOf("") }
+    var showArchive by rememberSaveable { mutableStateOf(false) }
     val trimmed = query.trim()
 
     val results = remember(trimmed, uiState.allVideos, uiState.hideWatched, uiState.watchHistoryMap) {
@@ -109,6 +127,9 @@ fun SearchScreen(
             .filter { uiState.watchHistoryMap.containsKey(it.uri.toString()) }
             .sortedByDescending { uiState.watchHistoryMap[it.uri.toString()]?.lastPlayedAt ?: 0L }
             .take(10)
+    }
+    val archiveVideos = remember(uiState.allVideos, uiState.hideWatched, uiState.watchHistoryMap) {
+        if (uiState.hideWatched) uiState.allVideos.filterNot { isWatched(uiState.watchHistoryMap, it) } else uiState.allVideos
     }
     val folderCounts = remember(uiState.allVideos) {
         uiState.allVideos.groupingBy { it.bucketDisplayName }.eachCount()
@@ -134,7 +155,17 @@ fun SearchScreen(
 
             SearchField(query = query, onQueryChange = { query = it })
 
-            if (trimmed.isEmpty()) {
+            if (showArchive) {
+                ArchiveView(
+                    videos = archiveVideos,
+                    onBack = { showArchive = false },
+                    onPlay = { video ->
+                        viewModel.playVideo(video)
+                        onNavigateToFeed()
+                    },
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                )
+            } else if (trimmed.isEmpty()) {
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(bottom = 128.dp),
@@ -151,6 +182,9 @@ fun SearchScreen(
                                 }
                             )
                         }
+                    }
+                    item {
+                        ArchiveEntryCard(count = archiveVideos.size, onClick = { showArchive = true })
                     }
                     item {
                         FolderSection(
@@ -417,5 +451,216 @@ private fun ContinueCard(
             color = TextMuted,
             fontSize = 11.sp
         )
+    }
+}
+
+
+// ───────────── Archive: videos grouped by month and day, with a draggable date scrubber ─────────────
+
+private sealed class ArchiveItem {
+    abstract val key: String
+}
+
+private data class ArchiveHeader(val monthLabel: String, override val key: String) : ArchiveItem()
+
+private data class ArchiveRow(val videos: List<LocalVideo>, val dayLabel: String, override val key: String) : ArchiveItem()
+
+private val archiveMonthFormat = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
+private val archiveDayFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+private val archiveKeyFormat = SimpleDateFormat("yyyy-MM", Locale.US)
+
+private fun buildArchive(videos: List<LocalVideo>): List<ArchiveItem> {
+    val out = ArrayList<ArchiveItem>()
+    val sorted = videos.sortedByDescending { it.dateAddedSec }
+    sorted.groupBy { archiveKeyFormat.format(Date(it.dateAddedSec * 1000L)) }.forEach { (monthKey, monthVideos) ->
+        val monthDate = Date(monthVideos.first().dateAddedSec * 1000L)
+        out += ArchiveHeader(monthLabel = archiveMonthFormat.format(monthDate), key = "h-$monthKey")
+        monthVideos.chunked(3).forEachIndexed { rowIndex, row ->
+            val dayDate = Date(row.first().dateAddedSec * 1000L)
+            out += ArchiveRow(videos = row, dayLabel = archiveDayFormat.format(dayDate), key = "r-$monthKey-$rowIndex")
+        }
+    }
+    return out
+}
+
+private fun archiveIndexFor(fraction: Float, size: Int): Int {
+    if (size <= 1) return 0
+    return (fraction * (size - 1)).roundToInt().coerceIn(0, size - 1)
+}
+
+@Composable
+private fun ArchiveEntryCard(count: Int, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .bounceClick(pressedScale = 0.98f, onClick = onClick)
+            .clip(shape)
+            .background(Brush.linearGradient(listOf(Color(0x2EFFFFFF), Color(0x0DFFFFFF))))
+            .border(1.dp, Brush.linearGradient(listOf(GlassStrokeTop, GlassStrokeBottom)), shape)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Brush.linearGradient(listOf(AuroraFuchsia, AuroraViolet))),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.DateRange, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Archive", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Browse $count videos by date", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+        }
+        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+    }
+}
+
+@Composable
+private fun ArchiveView(
+    videos: List<LocalVideo>,
+    onBack: () -> Unit,
+    onPlay: (LocalVideo) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val archive = remember(videos) { buildArchive(videos) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var scrubbing by remember { mutableStateOf(false) }
+    var scrubFraction by remember { mutableFloatStateOf(0f) }
+
+    // Where the list currently is, as 0..1, so the thumb follows normal scrolling too
+    val scrollFraction by remember(archive) {
+        derivedStateOf {
+            if (archive.size <= 1) 0f else listState.firstVisibleItemIndex.toFloat() / (archive.size - 1)
+        }
+    }
+    val shownFraction = (if (scrubbing) scrubFraction else scrollFraction).coerceIn(0f, 1f)
+    val activeIndex = archiveIndexFor(shownFraction, archive.size)
+    val activeLabel = when (val item = archive.getOrNull(activeIndex)) {
+        is ArchiveHeader -> item.monthLabel
+        is ArchiveRow -> item.dayLabel
+        null -> ""
+    }
+
+    Column(modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Archive", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                Text("${videos.size} videos by date", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            val trackHeight = maxHeight
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(end = 36.dp),
+                contentPadding = PaddingValues(bottom = 128.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(archive, key = { it.key }) { entry ->
+                    when (entry) {
+                        is ArchiveHeader -> Text(
+                            text = entry.monthLabel,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            modifier = Modifier.padding(top = 10.dp, bottom = 4.dp)
+                        )
+                        is ArchiveRow -> ArchiveRowCells(row = entry.videos, onPlay = onPlay)
+                    }
+                }
+            }
+
+            // Draggable date scrubber on the right edge
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(36.dp)
+                    .pointerInput(archive) {
+                        detectVerticalDragGestures(
+                            onDragStart = { offset ->
+                                scrubbing = true
+                                scrubFraction = (offset.y / size.height).coerceIn(0f, 1f)
+                                scope.launch { listState.scrollToItem(archiveIndexFor(scrubFraction, archive.size)) }
+                            },
+                            onVerticalDrag = { change, _ ->
+                                change.consume()
+                                scrubFraction = (change.position.y / size.height).coerceIn(0f, 1f)
+                                scope.launch { listState.scrollToItem(archiveIndexFor(scrubFraction, archive.size)) }
+                            },
+                            onDragEnd = { scrubbing = false },
+                            onDragCancel = { scrubbing = false }
+                        )
+                    }
+            ) {
+                // Track
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .fillMaxHeight()
+                        .width(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0x26FFFFFF))
+                )
+                // Thumb
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = (trackHeight - 14.dp) * shownFraction)
+                        .size(14.dp)
+                        .clip(CircleShape)
+                        .background(Brush.linearGradient(listOf(AuroraViolet, AuroraFuchsia)))
+                )
+                // Date bubble, shown only while dragging
+                if (scrubbing && activeLabel.isNotEmpty()) {
+                    Text(
+                        text = activeLabel,
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-34).dp, y = (trackHeight - 14.dp) * shownFraction - 2.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xE6000000))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArchiveRowCells(row: List<LocalVideo>, onPlay: (LocalVideo) -> Unit) {
+    val cellShape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        row.forEach { video ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .aspectRatio(9f / 16f)
+                    .clip(cellShape)
+                    .bounceClick(pressedScale = 0.95f) { onPlay(video) }
+                    .border(1.dp, GlassBorderSubtle, cellShape)
+            ) {
+                VideoThumbnail(video = video, modifier = Modifier.fillMaxSize())
+            }
+        }
+        repeat(3 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
     }
 }
